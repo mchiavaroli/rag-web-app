@@ -1,30 +1,100 @@
 [
   {
-    "id": "msg_1776783910133_user",
+    "id": "msg_1776799828397_user",
     "role": "user",
-    "content": "Guidami nell'esecuzione di Operazione ID: OP-4409-E",
-    "timestamp": "2026-04-21T15:05:10.133Z"
+    "content": "COME controllo pneumatici",
+    "timestamp": "2026-04-21T19:30:28.397Z"
   },
   {
-    "id": "msg_1776783962423_assistant",
+    "id": "msg_1776799844724_assistant",
     "role": "assistant",
-    "content": "## Operazione ID: OP-4409-E — Connessione Cablaggio Sensore di Fase\n\n**Fonte:** *istruzioni_montaggio_automotive_v2.pdf* — Sezione 3\n\n---\n\n### Procedura\n\n1. **Identificare il connettore elettrico** del sensore di fase e il relativo modulo centrale a cui deve essere collegato.\n\n2. **Effettuare il cablaggio** del connettore elettrico al modulo centrale, rispettando rigorosamente lo **schema dei pin** riportato nella legenda del disegno CAD associato a questa operazione.\n\n   > ⚠️ **Nota critica — Riferimento al disegno tecnico:** La documentazione specifica che lo schema dei pin (pinout) è riportato **nella legenda dell'immagine CAD**. È indispensabile consultare il disegno tecnico allegato alla Sezione 3 per identificare la corretta corrispondenza dei pin prima di procedere all'innesto. Informazioni vitali sulla disposizione dei pin potrebbero non essere ripetute nel testo.\n\n3. **Inserire il connettore** fino a quando la **clip di sicurezza** emette un **\"click\" udibile**. Questo conferma il corretto innesto del connettore.\n\n4. **Verificare** che il connettore sia saldamente in posizione e che la clip di sicurezza sia completamente agganciata.\n\n---\n\n### Riepilogo Dati Operazione\n\n| Campo | Valore |\n|---|---|\n| **Operazione ID** | OP-4409-E |\n| **Descrizione** | Connessione Cablaggio Sensore di Fase |\n| **Componente** | Connettore elettrico sensore di fase → Modulo centrale |\n| **Criterio di accettazione** | Click udibile della clip di sicurezza |\n| **Riferimento visivo** | Schema pin nella legenda del disegno CAD (Sezione 3) |\n\n---\n\n### ⚠️ Avvertenze\n\n- **Non forzare** l'innesto del connettore se il click non viene percepito: verificare l'orientamento e l'allineamento dei pin consultando il disegno CAD.\n- **Non procedere** al cablaggio senza aver prima verificato la corrispondenza dei pin sulla legenda dell'immagine CAD.\n\n---\n\n**Nota:** Per quanto riguarda parametri aggiuntivi (es. coppie di serraggio, specifiche elettriche del cablaggio come sezione dei conduttori o tensione nominale), l'informazione richiesta non è presente nella documentazione fornita.",
+    "content": "# Procedura di Controllo Pressione Pneumatici\n\n**Riferimento:** Capitolo 4 — Sezione 4.1, Fig. 4.1 (manuale_manutenzione_auto.pdf, pag. 12-13)\n\n---\n\n## ⚠ AVVISO DI SICUREZZA\n\n> **Pressione errata aumenta lo spazio di frenata e causa usura irregolare del battistrada.** Verificare ogni **2 settimane**.\n\n---\n\n## Procedura Operativa (4 Passi)\n\n**PASSO 1 — Condizioni di misurazione:**\n- Misurare la pressione **a freddo**: veicolo fermo da almeno **3 ore** oppure con massimo **2 km** percorsi.\n\n**PASSO 2 — Applicazione manometro:**\n- Svitare il cappuccio della valvola di gonfiaggio.\n- Applicare il manometro alla valvola con pressione decisa.\n- *(Come illustrato nel disegno tecnico **Fig. 4.1**, la valvola è posizionata sul cerchio della ruota; una freccia gialla nel disegno collega il punto di intervento al dettaglio ingrandito del manometro con scala PSI/BAR.)*\n\n**PASSO 3 — Lettura e confronto:**\n- Leggere il valore sul manometro (unità: **BAR** o **PSI**).\n- Confrontare con le specifiche riportate sull'**etichetta del montante porta lato guida**.\n\n**PASSO 4 — Regolazione:**\n- Gonfiare o sgonfiare fino al valore corretto.\n- Verificare **tutte e 4 le ruote + la ruota di scorta**.\n\n---\n\n## Pressioni Raccomandate\n\n*(Da tabella tecnica — manuale_manutenzione_auto.pdf, pag. 13)*\n\n| Condizione | Anteriore | Posteriore |\n|---|---|---|\n| **Carico normale** (1-3 persone) | **2.3 bar** (~33.4 PSI) | **2.1 bar** (~30.5 PSI) |\n| **Carico pieno** (4-5 persone + bagagli) | **2.5 bar** | **2.8 bar** |\n| **Guida autostrada** (>120 km/h) | **2.5 bar** | **2.4 bar** |\n| **Ruota di scorta** | **4.2 bar** (uso temporaneo) | — |\n\n---\n\n## Ispezione Usura (Sezione 4.2)\n\nOltre alla pressione, verificare anche l'usura del battistrada:\n- **Profondità minima legale:** 1.6 mm\n- **Profondità raccomandata per sostituzione:** 3 mm (sicurezza ottimale)\n- Riferimento: indicatori **TWI** (Tread Wear Indicator) presenti sullo pneumatico.",
     "sources": [
       {
         "type": "pdf",
-        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
-        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
+        "title": "manuale_manutenzione_auto.pdf",
         "page": null,
-        "preview": ": OP-7712-W\nSezione 2: Allineamento Mozzo Ruota Anteriore\nIl componente deve essere centrato rispetto all'asse di rotazione. Verificare l'integrità dei fori di\nalloggiamento prima di inserire i perni. Istruzione Visiva: Consultare l'indicatore grafic"
+        "preview": "ici\n⚠ SICUREZZA:\u0000 \u0000P\u0000r\u0000e\u0000s\u0000s\u0000i\u0000o\u0000n\u0000e\u0000 \u0000e\u0000r\u0000r\u0000a\u0000t\u0000a\u0000 \u0000a\u0000u\u0000m\u0000e\u0000n\u0000t\u0000a\u0000 \u0000s\u0000p\u0000a\u0000z\u0000i\u0000o\u0000 \u0000f\u0000r\u0000e\u0000n\u0000a\u0000t\u0000a\u0000 \u0000e\u0000 \u0000u\u0000s\u0000u\u0000r\u0000a\u0000 \u0000i\u0000r\u0000r\u0000e\u0000g\u0000o\u0000l\u0000a\u0000r\u0000e\u0000. \u0000V\u0000e\u0000r\u0000i\u0000f\u0000i\u0000c\u0000a\u0000r\u0000e\u0000 \u0000o\u0000g\u0000n\u0000i\u0000 \u00002\u0000 \u0000s\u0000e\u0000t\u0000t\u0000i\u0000m\u0000a\u0000n\u0000e\u0000.\u0000 \nFig. 4.1 - Controllo pressione pneumatici con manometr"
       },
       {
         "type": "pdf",
         "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
         "title": "manuale_manutenzione_auto.pdf",
         "page": null,
-        "preview": "MANUALE DI\nMANUTENZIONE AUTO\nGuida Tecnica Completa con Illustrazioni\n\u0000E\u0000d\u0000i\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u00002\u00000\u00002\u00005\nIndice\n\u00001\u0000.\u0000 \u0000M\u0000a\u0000n\u0000u\u0000t\u0000e\u0000n\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u0000M\u0000o\u0000t\u0000o\u0000r\u0000e\u0000 \u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000 \u00002\n\u00002\u0000.\u0000 \u0000S\u0000i\u0000s\u0000t\u0000e\u0000m\u0000a\u0000 \u0000F\u0000r\u0000e\u0000n\u0000a\u0000n\u0000t\u0000e\u0000"
+        "preview": "A]         [SCATOLA B]\n    (Vano motore)       (Abitacolo)\n        │                    │\n    [F1] [F2]          [F3] [F4]\n    Fari Pompa         Radio A/C\n5A 10A 15A 20A 25A 30A Filamento\nBruciato\n4. PNEUMATICI E SOSPENSIONI\n4.1 Controllo e Regolazi"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p12_region1.png",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": 12,
+        "preview": "# Analisi Tecnica - Fig. 4.1: Controllo Pressione Pneumatici con Manometro\n\n## 1. Tipo di Contenuto\n**Illustrazione tecnica didattica/procedurale** — rappresentazione grafica schematizzata che mostra "
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p13_region2.png",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": 13,
+        "preview": "# Analisi Tecnica - Tabella Pressioni Pneumatici Raccomandate\n\n## 1. Tipo di Contenuto\n**Tabella tecnica** con valori di pressione gonfiaggio pneumatici, organizzata in formato a matrice con intestazi"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p12_region2.png",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": 12,
+        "preview": "# Analisi Immagine - Pagina 12: Manuale Manutenzione Auto\n\n## 1. Tipo di Contenuto\n\n**Avviso di sicurezza (warning box)** — Si tratta di un riquadro di avvertimento grafico con formattazione visiva di"
       }
     ],
-    "timestamp": "2026-04-21T15:06:02.423Z"
+    "timestamp": "2026-04-21T19:30:44.725Z"
+  },
+  {
+    "id": "msg_1776799915987_user",
+    "role": "user",
+    "content": "come controllare pneumatici",
+    "timestamp": "2026-04-21T19:31:55.987Z"
+  },
+  {
+    "id": "msg_1776799925719_assistant",
+    "role": "assistant",
+    "content": "**Controllo pneumatici**  \n**Riferimento:** manuale_manutenzione_auto.pdf, Cap. 4.1, **Fig. 4.1** + tabella pressioni pag. 13\n\n⚠ **Sicurezza:** pressione errata aumenta spazio di frenata e usura irregolare. **Verificare ogni 2 settimane**.\n\n## Procedura\n1. **Misurare a freddo**\n   - Veicolo fermo da almeno **3 ore** oppure con massimo **2 km** percorsi.\n\n2. **Applicare il manometro**\n   - Svitare il cappuccio della valvola.\n   - Applicare il manometro con pressione decisa.\n   - **Dal disegno tecnico Fig. 4.1:** la valvola è mostrata sul cerchio ruota e un dettaglio ingrandito evidenzia il manometro con scala **PSI/BAR**.\n\n3. **Leggere il valore**\n   - Leggere la pressione sul manometro.\n   - Confrontarla con l’etichetta sul **montante porta lato guida**.\n\n4. **Regolare la pressione**\n   - Gonfiare o sgonfiare fino al valore corretto.\n   - Controllare **tutte e 4 le ruote + ruota di scorta**.\n\n## Pressioni raccomandate\n| Condizione | Anteriore | Posteriore |\n|---|---:|---:|\n| Carico normale (1-3 persone) | **2.3 bar** | **2.1 bar** |\n| Carico pieno (4-5 persone + bagagli) | **2.5 bar** | **2.8 bar** |\n| Guida autostrada (>120 km/h) | **2.5 bar** | **2.4 bar** |\n| Ruota di scorta | **4.2 bar** | — |\n\n## Controllo usura pneumatici\n- **Profondità minima legale battistrada:** **1.6 mm**\n- **Sostituzione raccomandata:** **3 mm**\n- Verificare gli indicatori **TWI**.\n\n**Nota dal disegno tecnico Fig. 4.1:** l’esempio di lettura mostrato sul manometro è **2.3 bar**.",
+    "sources": [
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": null,
+        "preview": "ici\n⚠ SICUREZZA:\u0000 \u0000P\u0000r\u0000e\u0000s\u0000s\u0000i\u0000o\u0000n\u0000e\u0000 \u0000e\u0000r\u0000r\u0000a\u0000t\u0000a\u0000 \u0000a\u0000u\u0000m\u0000e\u0000n\u0000t\u0000a\u0000 \u0000s\u0000p\u0000a\u0000z\u0000i\u0000o\u0000 \u0000f\u0000r\u0000e\u0000n\u0000a\u0000t\u0000a\u0000 \u0000e\u0000 \u0000u\u0000s\u0000u\u0000r\u0000a\u0000 \u0000i\u0000r\u0000r\u0000e\u0000g\u0000o\u0000l\u0000a\u0000r\u0000e\u0000. \u0000V\u0000e\u0000r\u0000i\u0000f\u0000i\u0000c\u0000a\u0000r\u0000e\u0000 \u0000o\u0000g\u0000n\u0000i\u0000 \u00002\u0000 \u0000s\u0000e\u0000t\u0000t\u0000i\u0000m\u0000a\u0000n\u0000e\u0000.\u0000 \nFig. 4.1 - Controllo pressione pneumatici con manometr"
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": null,
+        "preview": "A]         [SCATOLA B]\n    (Vano motore)       (Abitacolo)\n        │                    │\n    [F1] [F2]          [F3] [F4]\n    Fari Pompa         Radio A/C\n5A 10A 15A 20A 25A 30A Filamento\nBruciato\n4. PNEUMATICI E SOSPENSIONI\n4.1 Controllo e Regolazi"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p12_region1.png",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": 12,
+        "preview": "# Analisi Tecnica - Fig. 4.1: Controllo Pressione Pneumatici con Manometro\n\n## 1. Tipo di Contenuto\n**Illustrazione tecnica didattica/procedurale** — rappresentazione grafica schematizzata che mostra "
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p13_region2.png",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": 13,
+        "preview": "# Analisi Tecnica - Tabella Pressioni Pneumatici Raccomandate\n\n## 1. Tipo di Contenuto\n**Tabella tecnica** con valori di pressione gonfiaggio pneumatici, organizzata in formato a matrice con intestazi"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p12_region2.png",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": 12,
+        "preview": "# Analisi Immagine - Pagina 12: Manuale Manutenzione Auto\n\n## 1. Tipo di Contenuto\n\n**Avviso di sicurezza (warning box)** — Si tratta di un riquadro di avvertimento grafico con formattazione visiva di"
+      }
+    ],
+    "timestamp": "2026-04-21T19:32:05.719Z"
   }
 ]

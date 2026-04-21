@@ -66,7 +66,8 @@ export async function POST(request: NextRequest) {
   try {
     await ensureDataDir()
 
-    const { message } = await request.json()
+
+    const { message, model } = await request.json()
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Messaggio non valido' }, { status: 400 })
     }
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
       const response = await fetch(`${RAG_BACKEND_URL}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, session_id: sessionId }),
+        body: JSON.stringify({ query: message, session_id: sessionId, model }),
       })
 
       if (!response.ok) {

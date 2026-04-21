@@ -21,7 +21,7 @@ from config import (MODEL_PROMPT, MODEL_IMAGE_ANALYSE, CHUNK_SIZE, CHUNK_OVERLAP
                     BATCH_SIZE, MIN_IMAGE_SIZE, EMBEDDING_MODEL,
                     get_index_path, get_metadata_path, get_chunks_path, get_images_folder,
                     ensure_output_dir)
-from anthropic import AnthropicFoundry
+from llm_client import call_llm_text, call_llm_with_image
 
 # Import del nuovo modulo Document Intelligence
 from document_intelligence_extractor import DocumentIntelligenceExtractor
@@ -192,10 +192,7 @@ def build_index_with_document_intelligence(
     """
     
     model = SentenceTransformer(embed_model_name)
-    claude_client = AnthropicFoundry(
-        api_key=MODEL_PROMPT['api_key'],
-        base_url=MODEL_PROMPT['endpoint']
-    )
+    # Il client LLM è gestito da llm_client.py in base al provider configurato
     
     all_chunks = []
     metadata = []
@@ -238,10 +235,9 @@ def build_index_with_document_intelligence(
         if use_text_contextualization and text_chunks:
             print(f"     Contestualizzazione chunk testo...")
             text_chunks_contextualized = contextualize_text_chunks_batch(
-                doc_text, text_chunks, doc_name, 
-                batch_size=batch_size, 
+                doc_text, text_chunks, doc_name,
+                batch_size=batch_size,
                 domain_prompt=domain_prompt,
-                client=claude_client
             )
         else:
             text_chunks_contextualized = [f"CONTENT: {c}" for c in text_chunks]
@@ -277,7 +273,6 @@ def build_index_with_document_intelligence(
                         doc_text, [table_text], doc_name,
                         batch_size=1,
                         domain_prompt=domain_prompt,
-                        client=claude_client
                     )[0]
                 else:
                     table_contextualized = f"CONTENT: {table_text}"

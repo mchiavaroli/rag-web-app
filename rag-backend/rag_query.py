@@ -11,7 +11,7 @@ from config import (MODEL_PROMPT, TOP_K_TEXT, TOP_K_IMAGES, MIN_K_IMAGES, SEARCH
                     IMAGE_SCORE_THRESHOLD, IMAGE_KEYWORD_OVERLAP_MIN,IMAGE_KEYWORD_OVERLAP_MAX,IMAGE_SCORE_MIN_WITH_KEYWORD,
                     IMAGE_HIGH_SCORE_THRESHOLD, IMAGE_KEYWORD_BOOST_THRESHOLD,
                     get_index_path, get_chunks_path)
-from anthropic import AnthropicFoundry
+from llm_client import call_llm_text
 from rag_logger import get_logger
 import os
 import re
@@ -261,8 +261,8 @@ Risposta:
     return prompt, image_refs
 
 
-def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True, session_id=None):
-    """Esegue la query RAG multimodale completa con memoria conversazionale"""
+def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True, session_id=None, model_config=None):
+    """Esegue la query RAG multimodale completa con memoria conversazionale. model_config permette override del modello LLM."""
     
     # === LOGGING: Inizializza ===
     logger = get_logger() if enable_logging else None
@@ -317,28 +317,15 @@ def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True,
     
     print("⏳ Interrogazione LLM in corso...")
     
-    # Usa Claude Opus tramite AnthropicFoundry
-    client = AnthropicFoundry(
-        api_key=MODEL_PROMPT['api_key'],
-        base_url=MODEL_PROMPT['endpoint']
-    )
-    
     try:
         llm_start = time.time()
-        message = client.messages.create(
-            model=MODEL_PROMPT['deployment_name'],
-            max_tokens=MODEL_PROMPT['max_tokens'],
-            temperature=MODEL_PROMPT['temperature'],
-            system="Sei un assistente tecnico esperto, preciso e sintetico.",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+        config = model_config if model_config is not None else MODEL_PROMPT
+        response_text, llm_usage = call_llm_text(
+            config,
+            system_prompt="Sei un assistente tecnico esperto, preciso e sintetico.",
+            user_prompt=prompt,
         )
         llm_time_ms = (time.time() - llm_start) * 1000
-        response_text = message.content[0].text
         
         # === LOGGING: Salva log query ===
         if logger and log_context:
@@ -368,9 +355,9 @@ def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True,
                     "top_scores": [round(s, 4) for s in top_scores]
                 },
                 response_info={
-                    "llm_model": MODEL_PROMPT['deployment_name'],
-                    "tokens_input": message.usage.input_tokens if hasattr(message, 'usage') else None,
-                    "tokens_output": message.usage.output_tokens if hasattr(message, 'usage') else None,
+                    "llm_model": config['deployment_name'],
+                    "tokens_input": llm_usage.get('input_tokens'),
+                    "tokens_output": llm_usage.get('output_tokens'),
                     "generation_time_ms": round(llm_time_ms, 2),
                     "response_text": response_text  # Output completo per memoria conversazionale
                 },
@@ -386,7 +373,7 @@ def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True,
                 context=log_context,
                 embedding_time_ms=embedding_time_ms,
                 retrieval_info={"search_time_ms": round(retrieval_time_ms, 2), "chunks_retrieved": len(retrieved)},
-                response_info={"llm_model": MODEL_PROMPT['deployment_name'], "error": str(e)},
+                response_info={"llm_model": config['deployment_name'], "error": str(e)},
                 success=False,
                 error_message=str(e)
             )

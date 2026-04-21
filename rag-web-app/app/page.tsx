@@ -1,5 +1,5 @@
 import { DocumentSidebar } from '@/components/document-sidebar'
-import { ChatInterface } from '@/components/chat-interface'
+import ChatInterface from '@/components/chat-interface'
 
 export default function Home() {
   return (

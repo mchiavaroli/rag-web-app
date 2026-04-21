@@ -1,11 +1,3 @@
-"""
-FastAPI Server - RAG Backend API
-Espone il pipeline RAG (indicizzazione + query) come HTTP API per la web app.
-
-Avvio: python api_server.py
-       oppure: uvicorn api_server:app --reload --port 8000
-"""
-
 import os
 import sys
 import glob
@@ -15,6 +7,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
+from fastapi.responses import JSONResponse  # ← aggiungi questa riga
 
 # Imposta CWD nella directory del backend per risolvere i path relativi di config.py
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -246,9 +239,12 @@ async def startup() -> None:
 # MODELLI PYDANTIC
 # ============================================================
 
+
+# Support model selection
 class QueryRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
+    model: Optional[str] = None
 
 
 # ============================================================
@@ -265,6 +261,18 @@ async def get_status() -> dict:
 async def list_documents() -> dict:
     """Elenca i PDF presenti nella cartella docs/."""
     return {"documents": _list_docs()}
+
+
+@app.get("/api/models")
+def get_models():
+    from config import MODEL_PROVIDERS, DEFAULT_MODEL_NAME
+    return {
+        "models": [
+            {"id": name, **{k: v for k, v in cfg.items() if k != 'api_key'}}
+            for name, cfg in MODEL_PROVIDERS.items()
+        ],
+        "default": DEFAULT_MODEL_NAME
+    }
 
 
 @app.post("/api/documents")
@@ -434,7 +442,15 @@ async def query(request: QueryRequest) -> dict:
     if index is None:
         raise HTTPException(status_code=503, detail="Impossibile caricare l'indice.")
 
+
     from rag_query import ask_llm
+    from config import get_model_provider, MODEL_PROVIDERS, DEFAULT_MODEL_NAME
+
+    # Scegli il modello richiesto, fallback a default
+    model_name = request.model or DEFAULT_MODEL_NAME
+    model_config = get_model_provider(model_name)
+    if not model_config:
+        model_config = MODEL_PROVIDERS[DEFAULT_MODEL_NAME]
 
     response_text, retrieved, images_shown = ask_llm(
         query=request.query,
@@ -444,6 +460,7 @@ async def query(request: QueryRequest) -> dict:
         show_sources=False,
         enable_logging=True,
         session_id=request.session_id,
+        model_config=model_config,
     )
 
     # ── Fonti: testo da retrieved + immagini da images_shown (loggato) ──

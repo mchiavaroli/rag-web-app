@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ChatMessage, Source } from '@/lib/types'
+import type { ChatMessage, Source, ModelProvider } from '@/lib/types'
 import { SourceViewer } from './source-viewer'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -24,65 +24,22 @@ const QUICK_COMMANDS = [
 function deduplicateSources(sources: Source[]): Source[] {
   const seen = new Set<string>()
   return sources.filter(s => {
-    if (s.type === 'image') return true      // immagini: tutte visibili
-    const key = s.title || s.path           // PDF: chiave = nome file
+    if (s.type === 'image') return true
+    const key = s.title || s.path
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
 }
 
-/** Componente markdown con stili Tailwind */
-function MarkdownContent({ content, isUser }: { content: string; isUser: boolean }) {
-  const prose = isUser
-    ? 'text-primary-foreground'
-    : 'text-foreground'
-
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        h1: ({ children }) => <h1 className={`text-base font-bold mt-3 mb-1 ${prose}`}>{children}</h1>,
-        h2: ({ children }) => <h2 className={`text-sm font-bold mt-2 mb-1 ${prose}`}>{children}</h2>,
-        h3: ({ children }) => <h3 className={`text-sm font-semibold mt-2 mb-0.5 ${prose}`}>{children}</h3>,
-        p: ({ children }) => <p className={`text-sm leading-relaxed mb-1 ${prose}`}>{children}</p>,
-        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-        em: ({ children }) => <em className="italic">{children}</em>,
-        code: ({ children, className }) => {
-          const isBlock = className?.includes('language-')
-          return isBlock
-            ? <code className={`block bg-black/10 rounded px-2 py-1 text-xs font-mono my-1 whitespace-pre-wrap ${prose}`}>{children}</code>
-            : <code className="bg-black/10 rounded px-1 text-xs font-mono">{children}</code>
-        },
-        pre: ({ children }) => <pre className="my-2 overflow-x-auto">{children}</pre>,
-        ul: ({ children }) => <ul className={`list-disc list-inside text-sm space-y-0.5 mb-1 pl-2 ${prose}`}>{children}</ul>,
-        ol: ({ children }) => <ol className={`list-decimal list-inside text-sm space-y-0.5 mb-1 pl-2 ${prose}`}>{children}</ol>,
-        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-        blockquote: ({ children }) => (
-          <blockquote className={`border-l-2 border-current/30 pl-3 italic my-1 opacity-80 ${prose}`}>{children}</blockquote>
-        ),
-        hr: () => <hr className="my-2 border-current/20" />,
-        table: ({ children }) => (
-          <div className="overflow-x-auto my-2">
-            <table className="text-xs border-collapse w-full">{children}</table>
-          </div>
-        ),
-        th: ({ children }) => <th className="border border-current/20 px-2 py-1 font-semibold bg-black/5 text-left">{children}</th>,
-        td: ({ children }) => <td className="border border-current/20 px-2 py-1">{children}</td>,
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{children}</a>
-        ),
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  )
-}
-
-export function ChatInterface() {
+function ChatInterface() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [pendingUserMsg, setPendingUserMsg] = useState<DisplayMessage | null>(null)
+  const [models, setModels] = useState<ModelProvider[]>([])
+  const [activeModel, setActiveModel] = useState<string>('')
+  const activeModelRef = useRef<string>('')  // ← aggiungi questo
+  const [defaultModel, setDefaultModel] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -91,6 +48,18 @@ export function ChatInterface() {
     fetcher,
     { refreshInterval: 0 }
   )
+
+  useEffect(() => {
+  fetch('/api/models')
+    .then(res => res.json())
+    .then((data) => {
+      setModels(data.models || [])
+      setDefaultModel(data.default || '')
+      setActiveModel(data.default || '')  // data.default è già la chiave del dict
+      activeModelRef.current = data.default || ''
+    })
+    .catch(() => setModels([]))
+}, [])
 
   const serverMessages = data?.messages || []
   const displayMessages: DisplayMessage[] = pendingUserMsg
@@ -123,7 +92,7 @@ export function ChatInterface() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, model: activeModelRef.current }),
       })
       if (!response.ok) throw new Error('Errore nella risposta')
       await mutate('/api/chat')
@@ -160,7 +129,7 @@ export function ChatInterface() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background overflow-hidden">
-      {/* Header */}
+      {/* Header + Model Switcher */}
       <div className="shrink-0 px-4 py-3 border-b border-border flex items-center justify-between bg-card">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center shrink-0">
@@ -171,17 +140,37 @@ export function ChatInterface() {
             <p className="text-xs text-muted-foreground">Fai domande sui tuoi documenti</p>
           </div>
         </div>
-        {serverMessages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearChat}
-            className="text-muted-foreground hover:text-destructive shrink-0"
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            Pulisci
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {models.length > 1 && (
+            <select
+              className="text-xs border rounded px-2 py-1 bg-background text-foreground"
+              value={activeModel}
+              onChange={e => {
+                setActiveModel(e.target.value)
+                activeModelRef.current = e.target.value
+              }}
+              disabled={isLoading}
+              title="Seleziona modello LLM"
+            >
+              {models.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+            </select>
+          )}
+          {serverMessages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearChat}
+              className="text-muted-foreground hover:text-destructive shrink-0"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Pulisci
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -219,13 +208,11 @@ export function ChatInterface() {
 
                   <MarkdownContent content={message.content} isUser={message.role === 'user'} />
 
-                  {/* Sources */}
                   {message.sources && message.sources.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/40">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                         Fonti ({deduplicateSources(message.sources).length})
                       </p>
-                      {/* Thumbnails immagini */}
                       {message.sources.filter(s => s.type === 'image').length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-2">
                           {message.sources
@@ -235,7 +222,6 @@ export function ChatInterface() {
                             ))}
                         </div>
                       )}
-                      {/* PDF deduplicati */}
                       <div className="space-y-1">
                         {deduplicateSources(message.sources)
                           .filter(s => s.type === 'pdf')
@@ -261,7 +247,6 @@ export function ChatInterface() {
           ))
         )}
 
-        {/* Typing indicator */}
         {isLoading && (
           <div className="flex items-end gap-2 justify-start">
             <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center shrink-0 mb-1">
@@ -322,5 +307,52 @@ export function ChatInterface() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default ChatInterface
+
+/** Componente markdown con stili Tailwind */
+function MarkdownContent({ content, isUser }: { content: string; isUser: boolean }) {
+  const prose = isUser ? 'text-primary-foreground' : 'text-foreground'
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ children }) => <h1 className={`text-base font-bold mt-3 mb-1 ${prose}`}>{children}</h1>,
+        h2: ({ children }) => <h2 className={`text-sm font-bold mt-2 mb-1 ${prose}`}>{children}</h2>,
+        h3: ({ children }) => <h3 className={`text-sm font-semibold mt-2 mb-0.5 ${prose}`}>{children}</h3>,
+        p: ({ children }) => <p className={`text-sm leading-relaxed mb-1 ${prose}`}>{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        em: ({ children }) => <em className="italic">{children}</em>,
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-')
+          return isBlock
+            ? <code className={`block bg-black/10 rounded px-2 py-1 text-xs font-mono my-1 whitespace-pre-wrap ${prose}`}>{children}</code>
+            : <code className="bg-black/10 rounded px-1 text-xs font-mono">{children}</code>
+        },
+        pre: ({ children }) => <pre className="my-2 overflow-x-auto">{children}</pre>,
+        ul: ({ children }) => <ul className={`list-disc list-inside text-sm space-y-0.5 mb-1 pl-2 ${prose}`}>{children}</ul>,
+        ol: ({ children }) => <ol className={`list-decimal list-inside text-sm space-y-0.5 mb-1 pl-2 ${prose}`}>{children}</ol>,
+        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+        blockquote: ({ children }) => (
+          <blockquote className={`border-l-2 border-current/30 pl-3 italic my-1 opacity-80 ${prose}`}>{children}</blockquote>
+        ),
+        hr: () => <hr className="my-2 border-current/20" />,
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-2">
+            <table className="text-xs border-collapse w-full">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => <th className="border border-current/20 px-2 py-1 font-semibold bg-black/5 text-left">{children}</th>,
+        td: ({ children }) => <td className="border border-current/20 px-2 py-1">{children}</td>,
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{children}</a>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   )
 }

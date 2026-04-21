@@ -19,7 +19,7 @@ from config import (MODEL_PROMPT, AZURE_VISION, CHUNK_SIZE, CHUNK_OVERLAP,
                     BATCH_SIZE, MIN_IMAGE_SIZE, USE_LAYOUT_DETECTION, EMBEDDING_MODEL,
                     get_index_path, get_metadata_path, get_chunks_path, get_images_folder,
                     ensure_output_dir)
-from anthropic import AnthropicFoundry
+from llm_client import call_llm_text
 
 # Azure AI Vision
 from azure.ai.vision.imageanalysis import ImageAnalysisClient
@@ -332,14 +332,12 @@ def chunk_text(text, chunk_size=800, overlap=200):
 def contextualize_text_chunks_batch(doc_text, chunks, doc_name, batch_size=10, domain_prompt=None, client=None):
     """
     Contextual Retrieval per chunk di TESTO
-    Genera contesto LLM per ogni chunk testuale usando Claude Opus
+    Genera contesto LLM per ogni chunk testuale
     """
-    if client is None:
-        client = AnthropicFoundry(
-            api_key=MODEL_PROMPT['api_key'],
-            base_url=MODEL_PROMPT['endpoint']
-        )
-    
+    if client is not None:
+        import warnings
+        warnings.warn("Il parametro 'client' è deprecato. Viene usata la configurazione da config.py.", DeprecationWarning)
+
     if domain_prompt is None:
         domain_prompt = """You are an expert technical document analyst.
 For each text chunk, provide a succinct context (1-2 sentences) that:
@@ -377,14 +375,12 @@ Return ONLY valid JSON with format:
 }}"""
 
         try:
-            message = client.messages.create(
-                model=MODEL_PROMPT['deployment_name'],
-                max_tokens=MODEL_PROMPT['max_tokens'],
-                temperature=MODEL_PROMPT['temperature'],
-                system="You are a precise analyst. Return only valid JSON.",
-                messages=[{"role": "user", "content": prompt}]
+            response_text, _ = call_llm_text(
+                MODEL_PROMPT,
+                system_prompt="You are a precise analyst. Return only valid JSON.",
+                user_prompt=prompt,
             )
-            content = message.content[0].text.strip()
+            content = response_text.strip()
             
             if content.startswith('```'):
                 content = re.sub(r'^```(?:json)?\n', '', content)
@@ -466,11 +462,8 @@ def build_index_with_azure_vision(
         exit(1)
     
     model = SentenceTransformer(embed_model_name)
-    claude_client = AnthropicFoundry(
-        api_key=MODEL_PROMPT['api_key'],
-        base_url=MODEL_PROMPT['endpoint']
-    )
-    
+    # Il client LLM è gestito da llm_client.py in base al provider configurato
+
     all_chunks = []
     metadata = []
     
@@ -494,12 +487,11 @@ def build_index_with_azure_vision(
         
         # --- TESTO: Contextual Retrieval ---
         if use_text_contextualization and text_chunks:
-            print(f"     Contestualizzazione chunk testo con Claude...")
+            print(f"     Contestualizzazione chunk testo con LLM...")
             text_chunks_contextualized = contextualize_text_chunks_batch(
-                doc_text, text_chunks, doc_name, 
-                batch_size=batch_size, 
+                doc_text, text_chunks, doc_name,
+                batch_size=batch_size,
                 domain_prompt=domain_prompt,
-                client=claude_client
             )
         else:
             text_chunks_contextualized = [f"CONTENT: {c}" for c in text_chunks]
