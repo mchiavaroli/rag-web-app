@@ -1,0 +1,28 @@
+# Immagini estratte
+extracted_images/
+
+# Documenti sorgente
+docs/*
+archive_docs/*
+output/*
+
+# Index e metadata (file grandi, rigenerare localmente)
+*.faiss
+*.jsonl
+metadata*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Azure config (contiene API keys)
+config.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+script.txt

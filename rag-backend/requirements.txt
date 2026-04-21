@@ -1,0 +1,38 @@
+# requirements.txt
+# Dipendenze per RAG Multimodal + Contextual + Document Intelligence
+# Sistema completo: Testo + Immagini + Tabelle con Contextual Retrieval
+
+# Core RAG
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.4  # o faiss-gpu per performance superiori
+numpy>=1.24.0
+
+# PDF Processing
+pypdf>=3.0.0
+PyMuPDF>=1.23.0  # Estrazione immagini dai PDF
+
+# Image Processing
+Pillow>=10.0.0
+opencv-python>=4.8.0  # Per layout detection avanzato
+
+# LLM & AI
+anthropic>=0.28.0  # Claude SDK
+openai>=1.0.0
+
+# Azure AI Services
+azure-ai-formrecognizer>=3.3.0  # Azure Document Intelligence
+azure-ai-vision-imageanalysis>=1.0.0  # Azure AI Vision (Image Analysis 4.0)
+azure-core>=1.29.0
+
+# API Server
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9  # per upload file in FastAPI
+
+# Document Processing (opzionale per DOCX, Excel)
+python-docx>=0.8.11
+openpyxl>=3.0.10
+
+# Utils
+tqdm>=4.65.0
+
