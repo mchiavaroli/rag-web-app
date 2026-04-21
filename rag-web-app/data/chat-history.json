@@ -1,0 +1,30 @@
+[
+  {
+    "id": "msg_1776783910133_user",
+    "role": "user",
+    "content": "Guidami nell'esecuzione di Operazione ID: OP-4409-E",
+    "timestamp": "2026-04-21T15:05:10.133Z"
+  },
+  {
+    "id": "msg_1776783962423_assistant",
+    "role": "assistant",
+    "content": "## Operazione ID: OP-4409-E — Connessione Cablaggio Sensore di Fase\n\n**Fonte:** *istruzioni_montaggio_automotive_v2.pdf* — Sezione 3\n\n---\n\n### Procedura\n\n1. **Identificare il connettore elettrico** del sensore di fase e il relativo modulo centrale a cui deve essere collegato.\n\n2. **Effettuare il cablaggio** del connettore elettrico al modulo centrale, rispettando rigorosamente lo **schema dei pin** riportato nella legenda del disegno CAD associato a questa operazione.\n\n   > ⚠️ **Nota critica — Riferimento al disegno tecnico:** La documentazione specifica che lo schema dei pin (pinout) è riportato **nella legenda dell'immagine CAD**. È indispensabile consultare il disegno tecnico allegato alla Sezione 3 per identificare la corretta corrispondenza dei pin prima di procedere all'innesto. Informazioni vitali sulla disposizione dei pin potrebbero non essere ripetute nel testo.\n\n3. **Inserire il connettore** fino a quando la **clip di sicurezza** emette un **\"click\" udibile**. Questo conferma il corretto innesto del connettore.\n\n4. **Verificare** che il connettore sia saldamente in posizione e che la clip di sicurezza sia completamente agganciata.\n\n---\n\n### Riepilogo Dati Operazione\n\n| Campo | Valore |\n|---|---|\n| **Operazione ID** | OP-4409-E |\n| **Descrizione** | Connessione Cablaggio Sensore di Fase |\n| **Componente** | Connettore elettrico sensore di fase → Modulo centrale |\n| **Criterio di accettazione** | Click udibile della clip di sicurezza |\n| **Riferimento visivo** | Schema pin nella legenda del disegno CAD (Sezione 3) |\n\n---\n\n### ⚠️ Avvertenze\n\n- **Non forzare** l'innesto del connettore se il click non viene percepito: verificare l'orientamento e l'allineamento dei pin consultando il disegno CAD.\n- **Non procedere** al cablaggio senza aver prima verificato la corrispondenza dei pin sulla legenda dell'immagine CAD.\n\n---\n\n**Nota:** Per quanto riguarda parametri aggiuntivi (es. coppie di serraggio, specifiche elettriche del cablaggio come sezione dei conduttori o tensione nominale), l'informazione richiesta non è presente nella documentazione fornita.",
+    "sources": [
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": null,
+        "preview": ": OP-7712-W\nSezione 2: Allineamento Mozzo Ruota Anteriore\nIl componente deve essere centrato rispetto all'asse di rotazione. Verificare l'integrità dei fori di\nalloggiamento prima di inserire i perni. Istruzione Visiva: Consultare l'indicatore grafic"
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
+        "title": "manuale_manutenzione_auto.pdf",
+        "page": null,
+        "preview": "MANUALE DI\nMANUTENZIONE AUTO\nGuida Tecnica Completa con Illustrazioni\n\u0000E\u0000d\u0000i\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u00002\u00000\u00002\u00005\nIndice\n\u00001\u0000.\u0000 \u0000M\u0000a\u0000n\u0000u\u0000t\u0000e\u0000n\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u0000M\u0000o\u0000t\u0000o\u0000r\u0000e\u0000 \u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000 \u00002\n\u00002\u0000.\u0000 \u0000S\u0000i\u0000s\u0000t\u0000e\u0000m\u0000a\u0000 \u0000F\u0000r\u0000e\u0000n\u0000a\u0000n\u0000t\u0000e\u0000"
+      }
+    ],
+    "timestamp": "2026-04-21T15:06:02.423Z"
+  }
+]
