@@ -11,7 +11,7 @@ next.user-config.*
 .env*.local
 
 # Logs
-data/
+data/session.json
 
 # Common ignores
 node_modules
