@@ -11,8 +11,7 @@ next.user-config.*
 .env*.local
 
 # Logs
-chat-history.json
-session.json
+data/
 
 # Common ignores
 node_modules
