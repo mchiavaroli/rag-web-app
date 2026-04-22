@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import useSWR, { mutate } from 'swr'
 import { FileText, Upload, Trash2, File, Loader2, RefreshCw, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LogViewer } from '@/components/log-viewer'
 import { Card } from '@/components/ui/card'
 import type { Document, IndexStatus } from '@/lib/types'
 
@@ -162,6 +163,7 @@ export function DocumentSidebar() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+
   return (
     <div className="w-80 border-r border-border bg-card flex flex-col h-full">
       <div className="p-4 border-b border-border">
@@ -169,6 +171,11 @@ export function DocumentSidebar() {
           <FileText className="h-5 w-5" />
           Documenti
         </h2>
+      </div>
+
+      {/* Log Viewer Button */}
+      <div className="px-4 pt-3 pb-1">
+        <LogViewer />
       </div>
 
       {/* Upload Area */}
