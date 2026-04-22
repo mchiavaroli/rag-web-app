@@ -10,6 +10,10 @@ next.user-config.*
 # Environment variables
 .env*.local
 
+# Logs
+chat-history.json
+session.json
+
 # Common ignores
 node_modules
 .next/
