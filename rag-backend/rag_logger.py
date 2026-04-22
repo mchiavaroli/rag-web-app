@@ -84,7 +84,8 @@ class RAGLogger:
         llm_calls_info: Dict,
         index_path: str,
         success: bool = True,
-        error_message: str = None
+        error_message: str = None,
+        model_info: Dict = None
     ) -> Dict:
         """
         Completa e salva il log di indicizzazione.
@@ -115,6 +116,8 @@ class RAGLogger:
                 "index_path": index_path
             }
         }
+        if model_info is not None:
+            log_entry["model_info"] = model_info
         
         if error_message:
             log_entry["error"] = error_message
