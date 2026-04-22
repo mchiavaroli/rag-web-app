@@ -226,7 +226,7 @@ Fornisci una descrizione completa e ricercabile che permetta di recuperare quest
         
         message = client.messages.create(
             model=MODEL_IMAGE_ANALYSE['deployment_name'],
-            max_tokens=MODEL_IMAGE_ANALYSE['max_tokens'],
+            max_tokens=MODEL_IMAGE_ANALYSE.get('max_tokens', MODEL_IMAGE_ANALYSE.get('max_completion_tokens', 4096)),
             temperature=MODEL_IMAGE_ANALYSE['temperature'],
             messages=[
                 {
@@ -342,8 +342,8 @@ def contextualize_text_chunks_batch(doc_text, chunks, doc_name, batch_size=10, d
     """
     if client is None:
         client = AnthropicFoundry(
-            api_key=MODEL_PROMPT['api_key'],
-            base_url=MODEL_PROMPT['endpoint']
+            api_key=MODEL_IMAGE_ANALYSE['api_key'],
+            base_url=MODEL_IMAGE_ANALYSE['endpoint']
         )
     
     if domain_prompt is None:
@@ -384,9 +384,9 @@ Return ONLY valid JSON with format:
 
         try:
             message = client.messages.create(
-                model=MODEL_PROMPT['deployment_name'],
-                max_tokens=MODEL_PROMPT['max_tokens'],
-                temperature=MODEL_PROMPT['temperature'],
+                model=MODEL_IMAGE_ANALYSE['deployment_name'],
+                max_tokens=MODEL_IMAGE_ANALYSE.get('max_tokens', MODEL_IMAGE_ANALYSE.get('max_completion_tokens')),
+                temperature=MODEL_IMAGE_ANALYSE['temperature'],
                 system="You are a precise analyst. Return only valid JSON.",
                 messages=[
                     {
@@ -475,8 +475,8 @@ def build_index_multimodal_contextual(
     model = SentenceTransformer(embed_model_name)
     # Client Claude per contestualizzazione testo
     claude_client = AnthropicFoundry(
-        api_key=MODEL_PROMPT['api_key'],
-        base_url=MODEL_PROMPT['endpoint']
+        api_key=MODEL_IMAGE_ANALYSE['api_key'],
+        base_url=MODEL_IMAGE_ANALYSE['endpoint']
     )
     
     all_chunks = []  # Lista unificata di tutti i chunk (testo + immagini)
@@ -694,7 +694,11 @@ def build_index_multimodal_contextual(
                 "image_analysis": llm_calls_image_analysis,
                 "total_calls": llm_calls_contextualization + llm_calls_image_analysis
             },
-            index_path=index_path
+            index_path=index_path,
+            model_info={
+                "text_model": MODEL_IMAGE_ANALYSE.get("deployment_name", str(MODEL_IMAGE_ANALYSE)),
+                "image_model": MODEL_IMAGE_ANALYSE.get("deployment_name", str(MODEL_IMAGE_ANALYSE))
+            }
         )
         print(f"📝 Log indicizzazione salvato in: output/logs/indexing_logs.jsonl")
     except Exception as e:
