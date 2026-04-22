@@ -88,9 +88,32 @@ def call_llm_text(config: dict, system_prompt: str, user_prompt: str) -> tuple:
             }
         return resp.choices[0].message.content, usage
 
+    elif provider == 'mistral':
+        from openai import OpenAI
+        client = OpenAI(
+            base_url=config['endpoint'],
+            api_key=config['api_key'],
+        )
+        completion = client.chat.completions.create(
+            model=config['deployment_name'],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=config.get('max_tokens', 4096),
+            temperature=config.get('temperature', 0),
+        )
+        usage = {}
+        if hasattr(completion, 'usage') and completion.usage:
+            usage = {
+                'input_tokens': getattr(completion.usage, 'prompt_tokens', None),
+                'output_tokens': getattr(completion.usage, 'completion_tokens', None),
+            }
+        return completion.choices[0].message.content, usage
+
     else:
         raise ValueError(
-            f"Provider LLM non supportato: '{provider}'. Valori validi: 'anthropic', 'openai'."
+            f"Provider LLM non supportato: '{provider}'. Valori validi: 'anthropic', 'openai', 'mistral'."
         )
 
 
@@ -160,7 +183,25 @@ def call_llm_with_image(config: dict, base64_image: str, media_type: str, text_p
         )
         return resp.choices[0].message.content
 
+    elif provider == 'mistral':
+        from openai import OpenAI
+        client = OpenAI(
+            base_url=config['endpoint'],
+            api_key=config['api_key'],
+        )
+        # Mistral API non supporta immagini direttamente, fallback a solo testo
+        completion = client.chat.completions.create(
+            model=config['deployment_name'],
+            messages=[
+                {"role": "system", "content": "Se il prompt contiene un'immagine, rispondi che non è supportata."},
+                {"role": "user", "content": text_prompt},
+            ],
+            max_tokens=config.get('max_tokens', 4096),
+            temperature=config.get('temperature', 0),
+        )
+        return completion.choices[0].message.content
+
     else:
         raise ValueError(
-            f"Provider LLM non supportato: '{provider}'. Valori validi: 'anthropic', 'openai'."
+            f"Provider LLM non supportato: '{provider}'. Valori validi: 'anthropic', 'openai', 'mistral'."
         )

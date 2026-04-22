@@ -1,51 +1,37 @@
 [
   {
-    "id": "msg_1776849918795_user",
+    "id": "msg_1776852904034_user",
     "role": "user",
-    "content": "Come controllare pneumatici",
-    "timestamp": "2026-04-22T09:25:18.795Z"
+    "content": "ciaoo",
+    "timestamp": "2026-04-22T10:15:04.034Z"
   },
   {
-    "id": "msg_1776849936033_assistant",
+    "id": "msg_1776852919470_assistant",
     "role": "assistant",
-    "content": "# Procedura di Controllo Pneumatici\n\nLa documentazione fornita copre due aree di controllo: **pressione** (Sez. 4.1) e **usura battistrada** (Sez. 4.2).\n\n---\n\n## 4.1 — Controllo e Regolazione Pressione Pneumatici\n\n> ⚠ **SICUREZZA:** Pressione errata aumenta spazio di frenata e usura irregolare. Verificare ogni **2 settimane**.\n\n### Procedura operativa (4 passi):\n\n1. **PASSO 1** — Misurare la pressione **a freddo** (veicolo fermo da almeno 3 ore oppure max 2 km percorsi).\n2. **PASSO 2** — Svitare il cappuccio della valvola di gonfiaggio e applicare il manometro con pressione decisa.\n3. **PASSO 3** — Leggere il valore sul manometro (scala PSI/BAR) e confrontarlo con le specifiche riportate sull'**etichetta del montante porta lato guida**.\n4. **PASSO 4** — Gonfiare o sgonfiare fino al valore corretto. Verificare **tutte e 4 le ruote + ruota di scorta**.\n\n*(Riferimento visivo: **Fig. 4.1** — Disegno tecnico che mostra lo pneumatico, il punto di connessione alla valvola e il dettaglio ingrandito del manometro con lettura a 2.3 bar)*\n\n### Pressioni raccomandate:\n\n| Condizione | Anteriore | Posteriore |\n|---|---|---|\n| Carico normale (1–3 persone) | **2.3 bar** | **2.1 bar** |\n| Carico pieno (4–5 persone + bagagli) | **2.5 bar** | **2.8 bar** |\n| Guida autostradale (>120 km/h) | **2.5 bar** | **2.4 bar** |\n| Ruota di scorta | **4.2 bar** (uso temporaneo) | — |\n\n---\n\n## 4.2 — Ispezione Usura Battistrada\n\nControllare la profondità delle scanalature del battistrada utilizzando gli indicatori **TWI (Tread Wear Indicator)** integrati nello pneumatico.\n\n*(Riferimento visivo: **Fig. 4.2** — Disegno tecnico comparativo a tre stadi con codifica cromatica verde/giallo/rosso)*\n\n### Criteri di valutazione:\n\n| Stato | Profondità (H) | Codice colore | Azione |\n|---|---|---|---|\n| **BUONO** | **> 3 mm** | 🟢 Verde | Nessuna azione richiesta |\n| **LIMITE** | **~ 3 mm** | 🟡 Giallo | Pianificare la sostituzione |\n| **SOSTITUIRE** | **< 1,6 mm** | 🔴 Rosso | **Sostituzione obbligatoria** — limite legale minimo |\n\n### Note:\n- La profondità minima legale è **1,6 mm** (normativa europea).\n- Si raccomanda la sostituzione preventiva a **3 mm** per sicurezza ottimale.\n- Una pressione errata accelera l'usura irregolare del battistrada, rendendo i due controlli (pressione e usura) strettamente correlati.",
+    "content": "Mi dispiace, ma la tua richiesta non è pertinente alle procedure tecniche di manutenzione o assemblaggio automotive.\n\nSe hai domande specifiche su:\n- **Procedura di cambio olio** (es. punti di sollevamento, attrezzi necessari, passaggi dettagliati).\n- **Sistemi frenanti, elettrici o sospensioni** (es. schemi, coppie di serraggio, componenti).\n- **Tabelle di manutenzione periodica** (es. intervalli, specifiche tecniche).\n\nForniscimi una richiesta tecnica precisa e risponderò basandomi **esclusivamente** sulla documentazione fornita.",
     "sources": [
       {
         "type": "pdf",
         "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
         "title": "manuale_manutenzione_auto.pdf",
         "page": null,
-        "preview": "ici\n⚠ SICUREZZA:\u0000 \u0000P\u0000r\u0000e\u0000s\u0000s\u0000i\u0000o\u0000n\u0000e\u0000 \u0000e\u0000r\u0000r\u0000a\u0000t\u0000a\u0000 \u0000a\u0000u\u0000m\u0000e\u0000n\u0000t\u0000a\u0000 \u0000s\u0000p\u0000a\u0000z\u0000i\u0000o\u0000 \u0000f\u0000r\u0000e\u0000n\u0000a\u0000t\u0000a\u0000 \u0000e\u0000 \u0000u\u0000s\u0000u\u0000r\u0000a\u0000 \u0000i\u0000r\u0000r\u0000e\u0000g\u0000o\u0000l\u0000a\u0000r\u0000e\u0000. \u0000V\u0000e\u0000r\u0000i\u0000f\u0000i\u0000c\u0000a\u0000r\u0000e\u0000 \u0000o\u0000g\u0000n\u0000i\u0000 \u00002\u0000 \u0000s\u0000e\u0000t\u0000t\u0000i\u0000m\u0000a\u0000n\u0000e\u0000.\u0000 \nFig. 4.1 - Controllo pressione pneumatici con manometr"
+        "preview": "MANUALE DI\nMANUTENZIONE AUTO\nGuida Tecnica Completa con Illustrazioni\n\u0000E\u0000d\u0000i\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u00002\u00000\u00002\u00005\nIndice\n\u00001\u0000.\u0000 \u0000M\u0000a\u0000n\u0000u\u0000t\u0000e\u0000n\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u0000M\u0000o\u0000t\u0000o\u0000r\u0000e\u0000 \u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000 \u00002\n\u00002\u0000.\u0000 \u0000S\u0000i\u0000s\u0000t\u0000e\u0000m\u0000a\u0000 \u0000F\u0000r\u0000e\u0000n\u0000a\u0000n\u0000t\u0000e\u0000"
       },
       {
         "type": "pdf",
         "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
         "title": "manuale_manutenzione_auto.pdf",
         "page": null,
-        "preview": "A]         [SCATOLA B]\n    (Vano motore)       (Abitacolo)\n        │                    │\n    [F1] [F2]          [F3] [F4]\n    Fari Pompa         Radio A/C\n5A 10A 15A 20A 25A 30A Filamento\nBruciato\n4. PNEUMATICI E SOSPENSIONI\n4.1 Controllo e Regolazi"
+        "preview": "namento cric e contenitore per cambio olio\nProcedura:\nPASSO 1:\u0000 \u0000S\u0000o\u0000l\u0000l\u0000e\u0000v\u0000a\u0000r\u0000e\u0000 \u0000i\u0000l\u0000 \u0000v\u0000e\u0000i\u0000c\u0000o\u0000l\u0000o\u0000 \u0000c\u0000o\u0000n\u0000 \u0000c\u0000r\u0000i\u0000c\u0000 \u0000e\u0000 \u0000p\u0000o\u0000s\u0000i\u0000z\u0000i\u0000o\u0000n\u0000a\u0000r\u0000e\u0000 \u0000c\u0000a\u0000v\u0000a\u0000l\u0000l\u0000e\u0000t\u0000t\u0000i\u0000 \u0000d\u0000i\u0000 \u0000s\u0000i\u0000c\u0000u\u0000r\u0000e\u0000z\u0000z\u0000a\u0000. \u0000V\u0000e\u0000r\u0000i\u0000f\u0000i\u0000c\u0000a\u0000r\u0000e\u0000 \u0000s\u0000t\u0000a\u0000b\u0000i\u0000l\u0000i\u0000t\u0000à\u0000 \u0000p\u0000r\u0000i\u0000"
       },
       {
-        "type": "image",
-        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p12_region1.png",
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/manuale_manutenzione_auto.pdf",
         "title": "manuale_manutenzione_auto.pdf",
-        "page": 12,
-        "preview": "# Analisi Tecnica - Fig. 4.1: Controllo Pressione Pneumatici con Manometro\n\n## 1. Tipo di Contenuto\n**Illustrazione tecnica didattica/procedurale** — rappresentazione grafica schematizzata che mostra "
-      },
-      {
-        "type": "image",
-        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p13_region1.png",
-        "title": "manuale_manutenzione_auto.pdf",
-        "page": 13,
-        "preview": "# Analisi Tecnica - Fig. 4.2: Confronto Livelli Usura Battistrada Pneumatici\n\n## 1. Tipo di Contenuto\n**Diagramma comparativo visuale** a tre stadi che illustra la sezione trasversale del battistrada "
-      },
-      {
-        "type": "image",
-        "path": "http://localhost:8000/images/manuale_manutenzione_auto_p12_region2.png",
-        "title": "manuale_manutenzione_auto.pdf",
-        "page": 12,
-        "preview": "# Analisi Immagine - Pagina 12: Manuale Manutenzione Auto\n\n## 1. Tipo di Contenuto\n\n**Avviso di sicurezza (warning box)** — Si tratta di un riquadro di avvertimento grafico con formattazione visiva di"
+        "page": null,
+        "preview": "n\u0000s\u0000i\u0000o\u0000n\u0000i\u0000 \u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000 \u00008\n\u00005\u0000.\u0000 \u0000T\u0000a\u0000b\u0000e\u0000l\u0000l\u0000a\u0000 \u0000M\u0000a\u0000n\u0000u\u0000t\u0000e\u0000n\u0000z\u0000i\u0000o\u0000n\u0000e\u0000 \u0000P\u0000e\u0000r\u0000i\u0000o\u0000d\u0000i\u0000c\u0000a\u0000 \u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000.\u0000 \u00001\u00000\n\u0007î\u0000 \n\u0007î\u0000 \n\u0007î\u0000 \n\u0007î\u0000 \n\u0007î\u0000 \n1. MANUTENZIONE MOTORE\n1.1 Cambio Olio Motore\n⚠ AVVE"
       }
     ],
-    "timestamp": "2026-04-22T09:25:36.033Z"
+    "timestamp": "2026-04-22T10:15:19.470Z"
   }
 ]
