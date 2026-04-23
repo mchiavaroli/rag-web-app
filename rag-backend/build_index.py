@@ -19,7 +19,7 @@ from config import (MODEL_PROMPT, MODEL_IMAGE_ANALYSE, CHUNK_SIZE, CHUNK_OVERLAP
                     BATCH_SIZE, MIN_IMAGE_SIZE, USE_LAYOUT_DETECTION, EMBEDDING_MODEL,
                     get_index_path, get_metadata_path, get_chunks_path, get_images_folder,
                     ensure_output_dir)
-from anthropic import AnthropicFoundry
+from llm_client import call_llm_text, call_llm_with_image
 from rag_logger import get_logger
 
 
@@ -163,23 +163,23 @@ def extract_images_from_pdf(pdf_path, output_folder=None, min_size=100, use_layo
 
 
 def encode_image_to_base64(image_path):
-    """Converte immagine in base64 per GPT-4 Vision"""
+    """Converte immagine in base64"""
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
 
 
 def analyze_image_with_context(image_path, page_num, source_doc, page_text=None):
-    """Analizza immagine con Claude Opus, utilizzando il testo della pagina come contesto"""
+    """Analizza immagine con il modello configurato in MODEL_IMAGE_ANALYSE,
+    utilizzando il testo della pagina come contesto"""
+
     base64_image = encode_image_to_base64(image_path)
-    
+
     # Costruisci il prompt con contesto della pagina
     context_section = ""
     if page_text and page_text.strip():
-        # Limita il testo a ~1500 caratteri per non appesantire troppo il prompt
         page_text_preview = page_text[:1500]
         if len(page_text) > 1500:
             page_text_preview += "..."
-        
         context_section = f"""
 
 📄 CONTESTO DELLA PAGINA {page_num}:
@@ -189,7 +189,7 @@ def analyze_image_with_context(image_path, page_num, source_doc, page_text=None)
 Se il testo menziona argomenti, monumenti, codici o concetti tecnici, 
 FOCALIZZATI su quelli nell'analisi dell'immagine.
 """
-    
+
     prompt = f"""Sei un esperto ingegnere che analizza disegni tecnici, schemi, diagrammi e grafici.
 
 Analizza questa immagine dalla pagina {page_num} del documento "{source_doc}".{context_section}
@@ -206,49 +206,18 @@ Focalizzati su:
 Se il contesto della pagina menziona argomenti specifici, METTILI IN EVIDENZA nella descrizione.
 Fornisci una descrizione completa e ricercabile che permetta di recuperare questa immagine con query specifiche."""
 
-    # Claude richiede AnthropicFoundry invece di LangChain
-    client = AnthropicFoundry(
-        api_key=MODEL_IMAGE_ANALYSE['api_key'],
-        base_url=MODEL_IMAGE_ANALYSE['endpoint']
-    )
-    
+    ext = os.path.splitext(image_path)[1].lower()
+    media_type_map = {
+        '.jpg':  'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png':  'image/png',
+        '.gif':  'image/gif',
+        '.webp': 'image/webp',
+    }
+    media_type = media_type_map.get(ext, 'image/jpeg')
+
     try:
-        # Determina il tipo di media dall'estensione
-        ext = os.path.splitext(image_path)[1].lower()
-        media_type_map = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp'
-        }
-        media_type = media_type_map.get(ext, 'image/jpeg')
-        
-        message = client.messages.create(
-            model=MODEL_IMAGE_ANALYSE['deployment_name'],
-            max_tokens=MODEL_IMAGE_ANALYSE.get('max_tokens', MODEL_IMAGE_ANALYSE.get('max_completion_tokens', 4096)),
-            temperature=MODEL_IMAGE_ANALYSE['temperature'],
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": base64_image
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ]
-                }
-            ]
-        )
-        return message.content[0].text
+        return call_llm_with_image(MODEL_IMAGE_ANALYSE, base64_image, media_type, prompt)
     except Exception as e:
         print(f"[WARN] Errore analisi per {image_path}: {e}")
         return f"[Immagine dalla pagina {page_num}] Analisi non disponibile."
@@ -335,17 +304,11 @@ def chunk_text(text, chunk_size=800, overlap=200):
 
 # ===== CONTEXTUAL RETRIEVAL =====
 
-def contextualize_text_chunks_batch(doc_text, chunks, doc_name, batch_size=10, domain_prompt=None, client=None):
+def contextualize_text_chunks_batch(doc_text, chunks, doc_name, batch_size=10, domain_prompt=None):
     """
-    Contextual Retrieval per chunk di TESTO
-    Genera contesto LLM per ogni chunk testuale usando Claude Opus
+    Contextual Retrieval per chunk di TESTO.
+    Genera contesto LLM per ogni chunk testuale usando il modello configurato in MODEL_IMAGE_ANALYSE.
     """
-    if client is None:
-        client = AnthropicFoundry(
-            api_key=MODEL_IMAGE_ANALYSE['api_key'],
-            base_url=MODEL_IMAGE_ANALYSE['endpoint']
-        )
-    
     if domain_prompt is None:
         domain_prompt = """You are an expert technical document analyst.
 For each text chunk, provide a succinct context (1-2 sentences) that:
@@ -356,16 +319,16 @@ For each text chunk, provide a succinct context (1-2 sentences) that:
 Focus on technical accuracy and searchability."""
 
     contextualized = []
-    
+
     for i in range(0, len(chunks), batch_size):
         batch = chunks[i:i+batch_size]
-        
+
         chunks_xml = ""
         for idx, chunk in enumerate(batch):
             chunk_id = i + idx
             chunks_xml += f'<chunk id="{chunk_id}">\n{chunk}\n</chunk>\n\n'
-        
-        prompt = f"""<document name="{doc_name}">
+
+        user_prompt = f"""<document name="{doc_name}">
 {doc_text[:15000]}
 </document>
 
@@ -383,80 +346,66 @@ Return ONLY valid JSON with format:
 }}"""
 
         try:
-            message = client.messages.create(
-                model=MODEL_IMAGE_ANALYSE['deployment_name'],
-                max_tokens=MODEL_IMAGE_ANALYSE.get('max_tokens', MODEL_IMAGE_ANALYSE.get('max_completion_tokens')),
-                temperature=MODEL_IMAGE_ANALYSE['temperature'],
-                system="You are a precise analyst. Return only valid JSON.",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+            response_text, _ = call_llm_text(
+                MODEL_IMAGE_ANALYSE,
+                system_prompt="You are a precise analyst. Return only valid JSON.",
+                user_prompt=user_prompt,
             )
-            content = message.content[0].text.strip()
-            
+            content = response_text.strip()
+
             if content.startswith('```'):
                 content = re.sub(r'^```(?:json)?\n', '', content)
                 content = re.sub(r'\n```$', '', content)
-            
+
             contexts = json.loads(content)
-            
+
             for idx, chunk in enumerate(batch):
                 chunk_id = str(i + idx)
                 context = contexts.get(chunk_id, contexts.get(str(idx), ""))
-                
-                if context:
-                    contextualized_chunk = f"CONTEXT: {context}\n\nCONTENT: {chunk}"
-                else:
-                    contextualized_chunk = f"CONTENT: {chunk}"
-                
+                contextualized_chunk = f"CONTEXT: {context}\n\nCONTENT: {chunk}" if context else f"CONTENT: {chunk}"
                 contextualized.append(contextualized_chunk)
-            
+
             print(f"  ✓ Contestualizzati chunk testo {i}-{i+len(batch)}")
-            
+
         except Exception as e:
             print(f"  [WARN] Errore contestualizzazione batch {i}: {e}")
             for chunk in batch:
                 contextualized.append(f"CONTENT: {chunk}")
-    
+
     return contextualized
 
 
 def contextualize_image_descriptions(image_descriptions, doc_name):
     """
-    Contextual Retrieval per IMMAGINI
-    Arricchisce le descrizioni delle immagini con contesto posizionale
+    Contextual Retrieval per IMMAGINI.
+    Arricchisce le descrizioni delle immagini con contesto posizionale.
     """
     contextualized = []
-    
+
     for img_data in image_descriptions:
         description = img_data['description']
         page = img_data['page']
         img_path = img_data['image_path']
-        
-        # Genera contesto automatico per immagine
+
         context = f"Immagine tecnica dalla pagina {page} del documento '{doc_name}', salvata come {os.path.basename(img_path)}."
-        
         contextualized_desc = f"CONTEXT: {context}\n\nCONTENT: {description}"
-        
+
         contextualized.append({
             **img_data,
             'description_contextualized': contextualized_desc
         })
-    
+
     return contextualized
 
 
 # ===== BUILD INDEX =====
 
 def build_index_multimodal_contextual(
-    docs, 
+    docs,
     embed_model_name='all-MiniLM-L6-v2',
     index_path='docs_index_multimodal_contextual.faiss',
     meta_path='metadata_multimodal_contextual.json',
-    chunk_size=800, 
+    chunk_size=800,
     overlap=200,
     extract_images=True,
     analyze_images=True,
@@ -468,57 +417,51 @@ def build_index_multimodal_contextual(
     """
     Build index con:
     - Contextual Retrieval per chunk di testo
-    - Analisi immagini con Claude Opus
+    - Analisi immagini con il modello configurato in MODEL_IMAGE_ANALYSE
     - Contestualizzazione delle descrizioni immagini
     """
-    
+
     model = SentenceTransformer(embed_model_name)
-    # Client Claude per contestualizzazione testo
-    claude_client = AnthropicFoundry(
-        api_key=MODEL_IMAGE_ANALYSE['api_key'],
-        base_url=MODEL_IMAGE_ANALYSE['endpoint']
-    )
-    
+
     all_chunks = []  # Lista unificata di tutti i chunk (testo + immagini)
     metadata = []
-    
+
     # === LOGGING: Inizializza tracking ===
     logger = get_logger()
     log_context = logger.log_indexing_start(docs)
     llm_calls_contextualization = 0
     llm_calls_image_analysis = 0
     all_images_extracted = []
-    
+
     print("\n" + "="*70)
     print("RAG MULTIMODALE + CONTEXTUAL RETRIEVAL")
     print("="*70)
-    
+
     # ===== FASE 1: PROCESSING DOCUMENTI =====
     print(f"\n[1/5] Processing {len(docs)} documenti...")
-    
+
     for doc in tqdm(docs, desc="Documenti"):
         doc_name = doc['path']
         doc_text = doc['text']
         doc_full_path = doc['full_path']
-        
+
         # --- TESTO: Chunking ---
         text_chunks = chunk_text(doc_text, chunk_size=chunk_size, overlap=overlap)
         print(f"\n  📄 {doc_name}: {len(text_chunks)} chunk di testo")
-        
+
         # --- TESTO: Contextual Retrieval ---
         if use_text_contextualization and text_chunks:
             print(f"     Contestualizzazione chunk testo...")
             text_chunks_contextualized = contextualize_text_chunks_batch(
-                doc_text, text_chunks, doc_name, 
-                batch_size=batch_size, 
+                doc_text, text_chunks, doc_name,
+                batch_size=batch_size,
                 domain_prompt=domain_prompt,
-                client=claude_client  # Usa Claude per contestualizzazione
             )
             # LOG: conta chiamate LLM per contestualizzazione (batch)
             llm_calls_contextualization += (len(text_chunks) + batch_size - 1) // batch_size
         else:
             text_chunks_contextualized = [f"CONTENT: {c}" for c in text_chunks]
-        
+
         # Aggiungi chunk di testo
         for i, (original, contextualized) in enumerate(zip(text_chunks, text_chunks_contextualized)):
             all_chunks.append({
@@ -529,13 +472,13 @@ def build_index_multimodal_contextual(
                 'text_for_embedding': contextualized,
                 'page': None
             })
-        
+
         # --- IMMAGINI: Estrazione ---
         if extract_images and doc_full_path.endswith('.pdf'):
             print(f"     Estrazione immagini...")
             images = extract_images_from_pdf(doc_full_path, output_folder=get_images_folder(), min_size=min_image_size)
             print(f"     🖼️  {len(images)} immagini estratte")
-            
+
             # Estrai il testo di ogni pagina per contesto
             page_texts = {}
             if analyze_images and images:
@@ -546,14 +489,13 @@ def build_index_multimodal_contextual(
                         page_texts[page_idx + 1] = page.extract_text() or ''
                 except Exception as e:
                     print(f"     [WARN] Errore estrazione testo pagine: {e}")
-            
+
             # --- IMMAGINI: Analisi ---
             if analyze_images and images:
                 print(f"     Analisi immagini con contesto pagina...")
                 image_descriptions = []
-                
+
                 for img in tqdm(images, desc="     - Analisi immagini", leave=False):
-                    # Passa il testo della pagina come contesto
                     page_text = page_texts.get(img['page'], '')
                     description = analyze_image_with_context(
                         img['image_path'],
@@ -574,12 +516,12 @@ def build_index_multimodal_contextual(
                         'size': list(img['size']),
                         'type': img.get('type', 'unknown')
                     })
-                
+
                 # --- IMMAGINI: Contestualizzazione ---
                 image_descriptions_contextualized = contextualize_image_descriptions(
                     image_descriptions, doc_name
                 )
-                
+
                 # Aggiungi chunk di immagini
                 for img_data in image_descriptions_contextualized:
                     all_chunks.append({
@@ -592,10 +534,10 @@ def build_index_multimodal_contextual(
                         'image_path': img_data['image_path'],
                         'image_size': img_data['size']
                     })
-    
+
     if not all_chunks:
         raise ValueError("❌ Nessun chunk generato!")
-    
+
     # ===== FASE 2: STATISTICHE =====
     print(f"\n[2/5] Statistiche chunk...")
     text_chunks_count = sum(1 for c in all_chunks if c['type'] == 'text')
@@ -603,26 +545,26 @@ def build_index_multimodal_contextual(
     print(f"  📄 Chunk testo: {text_chunks_count}")
     print(f"  🖼️  Chunk immagini: {image_chunks_count}")
     print(f"  📊 Totale: {len(all_chunks)}")
-    
+
     # ===== FASE 3: EMBEDDINGS =====
     print(f"\n[3/5] Calcolo embeddings...")
     texts_for_embedding = [c['text_for_embedding'] for c in all_chunks]
     embeddings = model.encode(texts_for_embedding, show_progress_bar=True, convert_to_numpy=True)
-    
+
     # Normalizza
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-10
     embeddings = embeddings / norms
-    
+
     # ===== FASE 4: INDEX FAISS =====
     print(f"\n[4/5] Costruzione index FAISS...")
     d = embeddings.shape[1]
     index = faiss.IndexFlatIP(d)
     index.add(embeddings.astype('float32'))
     faiss.write_index(index, index_path)
-    
+
     # ===== FASE 5: SALVATAGGIO METADATA =====
     print(f"\n[5/5] Salvataggio metadata e chunk...")
-    
+
     for chunk in all_chunks:
         meta = {
             'type': chunk['type'],
@@ -634,10 +576,10 @@ def build_index_multimodal_contextual(
             meta['page'] = chunk['page']
             meta['image_path'] = chunk['image_path']
         metadata.append(meta)
-    
+
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump({'metadata': metadata}, f, ensure_ascii=False, indent=2)
-    
+
     # Salva chunk completi
     chunks_path = get_chunks_path()
     with open(chunks_path, 'w', encoding='utf-8') as f:
@@ -652,7 +594,7 @@ def build_index_multimodal_contextual(
                 'image_path': chunk.get('image_path')
             }, f, ensure_ascii=False)
             f.write('\n')
-    
+
     print("\n" + "="*70)
     print("✅ COMPLETATO!")
     print("="*70)
@@ -663,10 +605,9 @@ def build_index_multimodal_contextual(
     print(f"   - 📄 Testo (contextual): {text_chunks_count}")
     print(f"   - 🖼️  Immagini (vision+contextual): {image_chunks_count}")
     print("="*70 + "\n")
-    
+
     # === LOGGING: Salva log indicizzazione ===
     try:
-        # Calcola info documento (semplificato per multi-doc)
         total_pages = 0
         for doc in docs:
             if doc['full_path'].endswith('.pdf'):
@@ -675,7 +616,7 @@ def build_index_multimodal_contextual(
                     total_pages += len(reader.pages)
                 except:
                     pass
-        
+
         logger.log_indexing_complete(
             context=log_context,
             document_info={
@@ -703,7 +644,7 @@ def build_index_multimodal_contextual(
         print(f"📝 Log indicizzazione salvato in: output/logs/indexing_logs.jsonl")
     except Exception as e:
         print(f"[WARN] Errore salvataggio log: {e}")
-    
+
     return index_path, meta_path
 
 
@@ -723,28 +664,28 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=BATCH_SIZE, help='Chunk per chiamata LLM')
     parser.add_argument('--domain_prompt', type=str, help='Path file prompt personalizzato')
     parser.add_argument('--min_image_size', type=int, default=MIN_IMAGE_SIZE, help='Dimensione minima immagini (px)')
-    
+
     args = parser.parse_args()
-    
+
     # Crea directory output
     ensure_output_dir()
-    
+
     # Usa paths da config se non specificati
     index_path = args.index if args.index else get_index_path()
     meta_path = args.meta if args.meta else get_metadata_path()
-    
+
     # Carica domain prompt
     domain_prompt = None
     if args.domain_prompt and os.path.exists(args.domain_prompt):
         with open(args.domain_prompt, 'r', encoding='utf-8') as f:
             domain_prompt = f.read()
-        print(f"✓ Domain prompt caricato: {args.domain_prompt}")
-    
+        print(f"✓ Domain prompt caricato: {args.domain_prompt}")        
+
     docs = load_documents(args.docs)
     if not docs:
         print(f"❌ Nessun documento in {args.docs}")
         exit(1)
-    
+
     build_index_multimodal_contextual(
         docs,
         embed_model_name=args.embed_model,

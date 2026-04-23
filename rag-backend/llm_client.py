@@ -4,6 +4,7 @@ Unified LLM client - supporta Anthropic (Claude) e OpenAI (GPT) via Azure AI Fou
 Usa il campo 'provider' nella configurazione del modello per selezionare il client:
   - 'anthropic': usa AnthropicFoundry (Claude)
   - 'openai':    usa AzureOpenAI (GPT)
+  - 'mistral':   usa OpenAI (Mistral)
 
 Esempio config per Anthropic (default attuale):
     MODEL_PROMPT = {
@@ -22,6 +23,16 @@ Esempio config per OpenAI/GPT:
         'endpoint': 'https://....openai.azure.com/',
         'api_key': '...',
         'api_version': '2024-02-15-preview',
+        'max_tokens': 4096,
+        'temperature': 0,
+    }
+
+Esempio config per Mistral:
+    MODEL_PROMPT = {
+        'provider': 'mistral',
+        'deployment_name': 'Mistral-Large-3',
+        'endpoint': 'https://....services.ai.azure.com/openai/v1/',
+        'api_key': '...',
         'max_tokens': 4096,
         'temperature': 0,
     }
@@ -168,7 +179,7 @@ def call_llm_with_image(config: dict, base64_image: str, media_type: str, text_p
         )
         resp = client.chat.completions.create(
             model=config['deployment_name'],
-            max_tokens=config['max_tokens'],
+            max_completion_tokens=config['max_tokens'],
             temperature=config['temperature'],
             messages=[{
                 "role": "user",
