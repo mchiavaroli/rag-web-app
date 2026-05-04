@@ -109,8 +109,63 @@ def load_index(index_path=None,
     return index, chunks, model
 
 
+def _apply_image_reranking(results: list, query: str, top_k: int) -> list:
+    """
+    Applica re-ranking per immagini e combina risultati testo+immagini.
+    Usato sia dal path FAISS che da quello Azure AI Search.
+    """
+    text_results = [r for r in results if r['type'] == 'text']
+    image_results = [r for r in results if r['type'] == 'image']
+
+    if image_results:
+        query_lower = query.lower()
+        stopwords = {'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'di', 'da', 'a', 'in', 'su', 'per', 'con', 'come', 'dove', 'quando', 'chi', 'che', 'cosa', 'quale', 'è', 'sono', 'ha', 'hanno'}
+        query_words = set(word for word in query_lower.split() if word not in stopwords and len(word) > 2)
+
+        filtered_images = []
+        for img_result in image_results:
+            desc = img_result['chunk'].get('text_original', '').lower()
+            desc_words = set(word for word in desc.split() if len(word) > 2)
+            keyword_overlap = len(query_words & desc_words) / max(len(query_words), 1)
+            base_score = img_result['score']
+            img_result['keyword_overlap'] = keyword_overlap
+
+            if base_score >= IMAGE_SCORE_THRESHOLD and keyword_overlap >= IMAGE_KEYWORD_OVERLAP_MIN:
+                filtered_images.append(img_result)
+            elif base_score >= IMAGE_SCORE_MIN_WITH_KEYWORD and keyword_overlap >= IMAGE_KEYWORD_OVERLAP_MAX:
+                filtered_images.append(img_result)
+            elif base_score >= IMAGE_HIGH_SCORE_THRESHOLD:
+                filtered_images.append(img_result)
+            elif keyword_overlap >= IMAGE_KEYWORD_BOOST_THRESHOLD:
+                filtered_images.append(img_result)
+
+        image_results = filtered_images
+
+    image_results.sort(key=lambda x: x['score'], reverse=True)
+
+    final_results = []
+    final_results.extend(text_results[:TOP_K_TEXT])
+    if image_results:
+        final_results.extend(image_results[:TOP_K_IMAGES])
+
+    current_images = len([r for r in final_results if r['type'] == 'image'])
+    if MIN_K_IMAGES > 0 and current_images < MIN_K_IMAGES:
+        all_images = sorted([r for r in results if r['type'] == 'image'], key=lambda x: x['score'], reverse=True)
+        for img in all_images:
+            if img not in final_results:
+                final_results.append(img)
+                current_images += 1
+                if current_images >= MIN_K_IMAGES:
+                    break
+
+    final_results.sort(key=lambda x: x['score'], reverse=True)
+    return final_results[:top_k]
+
+
 def retrieve(query, index, chunks, model, top_k=None, expanded_query=None):
-    """Recupera i chunk più rilevanti (testo + immagini) con re-ranking bilanciato
+    """Recupera i chunk più rilevanti (testo + immagini) con re-ranking bilanciato.
+    
+    Usa Azure AI Search se configurato, altrimenti FAISS locale.
     
     Args:
         query: query originale per keyword matching
@@ -118,16 +173,25 @@ def retrieve(query, index, chunks, model, top_k=None, expanded_query=None):
     """
     if top_k is None:
         top_k = TOP_K_TEXT + TOP_K_IMAGES
-    
-    # Usa expanded_query per l'embedding se disponibile
+
     search_query = expanded_query if expanded_query else query
-    
     q_emb = model.encode([search_query], convert_to_numpy=True)
     q_emb = q_emb / (np.linalg.norm(q_emb, axis=1, keepdims=True) + 1e-10)
-    
-    # Recupera molti più risultati per avere scelta tra testi e immagini
-    search_k = min(top_k * SEARCH_MULTIPLIER, len(chunks))
-    D, I = index.search(q_emb.astype('float32'), search_k)
+
+    search_k = top_k * SEARCH_MULTIPLIER
+
+    # ===== AZURE AI SEARCH (se configurato) =====
+    try:
+        from azure_search_client import is_configured, search_chunks
+        if is_configured():
+            results = search_chunks(q_emb[0], top_k=min(search_k, 100))
+            return _apply_image_reranking(results, query, top_k)
+    except Exception as e:
+        print(f"[WARN] Azure AI Search non disponibile, uso FAISS locale: {e}")
+
+    # ===== FAISS FALLBACK =====
+    faiss_k = min(search_k, len(chunks))
+    D, I = index.search(q_emb.astype('float32'), faiss_k)
     
     results = []
     for idx, score in zip(I[0], D[0]):
@@ -140,63 +204,8 @@ def retrieve(query, index, chunks, model, top_k=None, expanded_query=None):
             'type': chunk['type'],
             'source': chunk['source']
         })
-    
-    # Separa testo e immagini
-    text_results = [r for r in results if r['type'] == 'text']
-    image_results = [r for r in results if r['type'] == 'image']
-    
-    # Re-ranking per immagini - usa soglie da config
-    if image_results:
-        query_lower = query.lower()
-        stopwords = {'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'di', 'da', 'a', 'in', 'su', 'per', 'con', 'come', 'dove', 'quando', 'chi', 'che', 'cosa', 'quale', 'è', 'sono', 'ha', 'hanno'}
-        query_words = set(word for word in query_lower.split() if word not in stopwords and len(word) > 2)
-        
-        filtered_images = []
-        for img_result in image_results:
-            desc = img_result['chunk'].get('text_original', '').lower()
-            desc_words = set(word for word in desc.split() if len(word) > 2)
-            
-            keyword_overlap = len(query_words & desc_words) / max(len(query_words), 1)
-            base_score = img_result['score']
-            img_result['keyword_overlap'] = keyword_overlap  # Salva per debug
-            
-            # Usa soglie da config.py
-            if base_score >= IMAGE_SCORE_THRESHOLD and keyword_overlap >= IMAGE_KEYWORD_OVERLAP_MIN:
-                filtered_images.append(img_result)
-            elif base_score >= IMAGE_SCORE_MIN_WITH_KEYWORD and keyword_overlap >= IMAGE_KEYWORD_OVERLAP_MAX:  # Keyword compensano score medio
-                filtered_images.append(img_result)
-            elif base_score >= IMAGE_HIGH_SCORE_THRESHOLD:  # Score alto anche senza keyword
-                filtered_images.append(img_result)
-            elif keyword_overlap >= IMAGE_KEYWORD_BOOST_THRESHOLD:  # Molte keyword in comune
-                filtered_images.append(img_result)
-        
-        image_results = filtered_images
-    
-    image_results.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Combina: TOP_K_TEXT testi + TOP_K_IMAGES immagini
-    final_results = []
-    final_results.extend(text_results[:TOP_K_TEXT])
-    
-    # Aggiungi immagini filtrate (max TOP_K_IMAGES)
-    if image_results:
-        final_results.extend(image_results[:TOP_K_IMAGES])
-    
-    # Se MIN_K_IMAGES > 0 e non abbiamo abbastanza immagini, prendi le migliori non filtrate
-    current_images = len([r for r in final_results if r['type'] == 'image'])
-    if MIN_K_IMAGES > 0 and current_images < MIN_K_IMAGES:
-        all_images = sorted([r for r in results if r['type'] == 'image'], key=lambda x: x['score'], reverse=True)
-        for img in all_images:
-            if img not in final_results:
-                final_results.append(img)
-                current_images += 1
-                if current_images >= MIN_K_IMAGES:
-                    break
-    
-    # Riordina per score
-    final_results.sort(key=lambda x: x['score'], reverse=True)
-    
-    return final_results[:top_k]
+
+    return _apply_image_reranking(results, query, top_k)
 
 
 def build_multimodal_prompt(query, retrieved_results, conversation_history: str = None):

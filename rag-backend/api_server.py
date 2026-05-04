@@ -96,26 +96,29 @@ def _run_indexing() -> None:
             _index_cache["chunks"] = None
             _index_cache["model"] = None
 
-        from build_index import load_documents, build_index_multimodal_contextual
+        from build_index_document_intelligence import (
+            load_documents_with_document_intelligence,
+            build_index_with_document_intelligence,
+        )
 
-        docs = load_documents(DOCS_DIR)
+        docs = load_documents_with_document_intelligence(DOCS_DIR, use_doc_intelligence=True)
         if not docs:
             indexing_state["status"] = "idle"
             indexing_state["message"] = "Nessun documento da indicizzare"
             return
 
-        build_index_multimodal_contextual(
+        build_index_with_document_intelligence(
             docs,
             embed_model_name=EMBEDDING_MODEL,
             index_path=get_index_path(),
             meta_path=get_metadata_path(),
             chunk_size=CHUNK_SIZE,
             overlap=CHUNK_OVERLAP,
-            extract_images=True,
             analyze_images=True,
             use_text_contextualization=True,
             batch_size=BATCH_SIZE,
             min_image_size=MIN_IMAGE_SIZE,
+            use_document_intelligence=True,
         )
 
         # Leggi le statistiche dall'indice appena creato

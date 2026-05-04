@@ -347,7 +347,7 @@ Return ONLY valid JSON with format:
 
         try:
             response_text, _ = call_llm_text(
-                MODEL_IMAGE_ANALYSE,
+                MODEL_PROMPT,
                 system_prompt="You are a precise analyst. Return only valid JSON.",
                 user_prompt=user_prompt,
             )

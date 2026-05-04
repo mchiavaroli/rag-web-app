@@ -17,14 +17,17 @@ import faiss
 from PIL import Image
 import fitz  # PyMuPDF per estrazione immagini - importato DOPO sentence-transformers
 
-from config import (MODEL_PROMPT, MODEL_IMAGE_ANALYSE, CHUNK_SIZE, CHUNK_OVERLAP,
+from config import (MODEL_PROMPT, CHUNK_SIZE, CHUNK_OVERLAP,
                     BATCH_SIZE, MIN_IMAGE_SIZE, EMBEDDING_MODEL,
                     get_index_path, get_metadata_path, get_chunks_path, get_images_folder,
                     ensure_output_dir)
-from llm_client import call_llm_text, call_llm_with_image
+from llm_client import call_llm_text
 
 # Import del nuovo modulo Document Intelligence
 from document_intelligence_extractor import DocumentIntelligenceExtractor
+
+# Import Azure AI Vision per analisi immagini
+from build_index_vision import analyze_image_with_azure_vision
 
 
 # ===== IMPORTA FUNZIONI ORIGINALI =====
@@ -306,7 +309,6 @@ def build_index_with_document_intelligence(
         
         # Analizza immagini
         if analyze_images and images:
-            print(f"     Analisi immagini con Claude...")
             
             # Ottieni testo pagine per contesto
             page_texts = {}
@@ -326,23 +328,15 @@ def build_index_with_document_intelligence(
             
             # Analizza ogni immagine
             image_descriptions = []
-            for img in tqdm(images, desc="     - Analisi immagini", leave=False):
+
+            # ===== ANALISI IMMAGINI CON AZURE AI VISION =====
+            print(f"     Analisi immagini con Azure AI Vision...")
+            for img in tqdm(images, desc="     - Analisi immagini (Vision)", leave=False):
                 page_text = page_texts.get(img['page'], '')
-                
-                # Usa caption di Document Intelligence se disponibile
-                if 'caption' in img and img['caption']:
-                    # Arricchisci con analisi Claude basandosi sul caption
-                    description = analyze_image_with_context(
-                        img['image_path'],
-                        img['page'], doc_name, 
-                        page_text + f"\n\nCaption documento: {img['caption']}"
-                    )
-                else:
-                    description = analyze_image_with_context(
-                        img['image_path'],
-                        img['page'], doc_name, page_text
-                    )
-                
+                description = analyze_image_with_azure_vision(
+                    img['image_path'],
+                    img['page'], doc_name, page_text
+                )
                 image_descriptions.append({
                     'page': img['page'],
                     'image_path': img['image_path'],
@@ -453,7 +447,19 @@ def build_index_with_document_intelligence(
     if use_document_intelligence:
         print(f"   - 📊 Tabelle (Document Intelligence): {table_chunks_count}")
     print("="*70 + "\n")
-    
+
+    # ===== UPLOAD AZURE AI SEARCH (se configurato) =====
+    try:
+        from azure_search_client import is_configured, create_or_update_index, upload_chunks as azure_upload_chunks
+        if is_configured():
+            print("[6] Upload su Azure AI Search...")
+            create_or_update_index()
+            azure_upload_chunks(all_chunks, embeddings)
+        else:
+            print("ℹ️  Azure AI Search non configurato — indice solo locale (FAISS).")
+    except Exception as e:
+        print(f"[WARN] Upload Azure AI Search fallito (indice locale disponibile): {e}")
+
     return index_path, meta_path
 
 

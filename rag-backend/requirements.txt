@@ -22,6 +22,7 @@ openai>=1.0.0
 # Azure AI Services
 azure-ai-formrecognizer>=3.3.0  # Azure Document Intelligence
 azure-ai-vision-imageanalysis>=1.0.0  # Azure AI Vision (Image Analysis 4.0)
+azure-search-documents>=11.4.0  # Azure AI Search (vector store cloud)
 azure-core>=1.29.0
 
 # API Server
