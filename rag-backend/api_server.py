@@ -247,6 +247,13 @@ class QueryRequest(BaseModel):
     model: Optional[str] = None
 
 
+class CompareRequest(BaseModel):
+    query: str
+    session_id: Optional[str] = None
+    model_a: str
+    model_b: str
+
+
 # ============================================================
 # ENDPOINTS
 # ============================================================
@@ -509,6 +516,111 @@ async def query(request: QueryRequest) -> dict:
                     })
 
     return {"answer": response_text, "sources": sources}
+
+
+@app.post("/api/compare")
+async def compare(request: CompareRequest) -> dict:
+    """Esegue la stessa query su due modelli in parallelo e restituisce i risultati a confronto."""
+    if not request.query or not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query vuota.")
+
+    if indexing_state["status"] == "building":
+        raise HTTPException(status_code=503, detail="Indicizzazione in corso. Riprova tra qualche minuto.")
+
+    if indexing_state["status"] != "ready":
+        raise HTTPException(status_code=503, detail="Nessun indice disponibile. Carica dei documenti e attendi l'indicizzazione.")
+
+    index, chunks, embed_model = _get_or_load_index()
+    if index is None:
+        raise HTTPException(status_code=503, detail="Impossibile caricare l'indice.")
+
+    from rag_query import ask_llm
+    from config import get_model_provider, MODEL_PROVIDERS, DEFAULT_MODEL_NAME
+    import concurrent.futures
+    import time
+
+    def _run_query(model_name: str) -> dict:
+        model_config = get_model_provider(model_name)
+        if not model_config:
+            model_config = MODEL_PROVIDERS[DEFAULT_MODEL_NAME]
+
+        t0 = time.time()
+        try:
+            response_text, retrieved, images_shown = ask_llm(
+                query=request.query,
+                index=index,
+                chunks=chunks,
+                model=embed_model,
+                show_sources=False,
+                enable_logging=False,
+                session_id=request.session_id,
+                model_config=model_config,
+            )
+        except Exception as exc:
+            return {
+                "model": model_name,
+                "answer": f"❌ Errore: {exc}",
+                "sources": [],
+                "latency_ms": int((time.time() - t0) * 1000),
+                "error": str(exc),
+            }
+        latency_ms = int((time.time() - t0) * 1000)
+
+        sources = []
+        seen: set = set()
+
+        for result in retrieved:
+            chunk = result["chunk"]
+            if chunk["type"] == "text":
+                key = f"text_{chunk['source']}_{chunk.get('chunk_id', '')}"
+                if key not in seen:
+                    seen.add(key)
+                    sources.append({
+                        "type": "pdf",
+                        "path": f"/docs/{chunk['source']}",
+                        "title": chunk["source"],
+                        "page": chunk.get("page"),
+                        "preview": chunk.get("text_original", "")[:250],
+                    })
+
+        chunk_by_image_name = {}
+        for result in retrieved:
+            chunk = result["chunk"]
+            if chunk["type"] == "image":
+                img_filename = os.path.basename(chunk.get("image_path", ""))
+                chunk_by_image_name[img_filename] = chunk
+
+        for img_info in images_shown:
+            img_filename = img_info["name"]
+            key = f"image_{img_filename}"
+            if key not in seen:
+                seen.add(key)
+                chunk = chunk_by_image_name.get(img_filename)
+                if chunk:
+                    abs_img_path = os.path.join(IMAGES_DIR, img_filename)
+                    if os.path.exists(abs_img_path):
+                        sources.append({
+                            "type": "image",
+                            "path": f"/images/{img_filename}",
+                            "title": chunk.get("source"),
+                            "page": chunk.get("page"),
+                            "preview": chunk.get("text_original", "")[:200],
+                        })
+
+        return {
+            "model": model_name,
+            "answer": response_text,
+            "sources": sources,
+            "latency_ms": latency_ms,
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_a = executor.submit(_run_query, request.model_a)
+        future_b = executor.submit(_run_query, request.model_b)
+        result_a = future_a.result()
+        result_b = future_b.result()
+
+    return {"results": [result_a, result_b]}
 
 
 @app.delete("/api/logs")

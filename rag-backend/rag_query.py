@@ -316,7 +316,16 @@ def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True,
     prompt, image_refs = build_multimodal_prompt(query, retrieved, conversation_history)
     
     print("⏳ Interrogazione LLM in corso...")
-    
+
+    images_shown = [
+        {
+            "name": os.path.basename(r['chunk'].get('image_path', 'unknown')),
+            "score": round(r['score'], 3),
+            "keyword_overlap": round(r.get('keyword_overlap', 0), 3)
+        }
+        for r in retrieved if r['chunk']['type'] == 'image'
+    ]
+
     try:
         llm_start = time.time()
         config = model_config if model_config is not None else MODEL_PROMPT
@@ -333,17 +342,7 @@ def ask_llm(query, index, chunks, model, show_sources=True, enable_logging=True,
             chunks_text = sum(1 for r in retrieved if r['chunk']['type'] == 'text')
             chunks_images = sum(1 for r in retrieved if r['chunk']['type'] == 'image')
             top_scores = [r['score'] for r in retrieved[:5]]
-            
-            # Info immagini mostrate (verranno aggiornate nel main)
-            images_shown = [
-                {
-                    "name": os.path.basename(r['chunk'].get('image_path', 'unknown')),
-                    "score": round(r['score'], 3),
-                    "keyword_overlap": round(r.get('keyword_overlap', 0), 3)
-                }
-                for r in retrieved if r['chunk']['type'] == 'image'
-            ]
-            
+
             logger.log_query_complete(
                 context=log_context,
                 embedding_time_ms=embedding_time_ms,
