@@ -1,1 +1,51 @@
-[]
+[
+  {
+    "id": "msg_1777902922571_user",
+    "role": "user",
+    "content": "Fissaggio supporto motore primario: come funziona?",
+    "timestamp": "2026-05-04T13:55:22.571Z"
+  },
+  {
+    "id": "msg_1777902943741_assistant",
+    "role": "assistant",
+    "content": "# Fissaggio Supporto Motore Primario\n\n**Operazione ID:** OP-5520-X\n**Modello:** Prototype-V6 | Linea di Assemblaggio Automotive\n\n---\n\n## Procedura di Montaggio\n\n1. **Posizionare il supporto in acciaio temperato** sul basamento del motore.\n2. **Verificare le superfici di contatto**: devono essere prive di lubrificanti residui.\n3. **Orientare correttamente il componente** seguendo la direzione indicata nel disegno tecnico dedicato (vedi sotto).\n4. **Fissare con il bullone specificato** applicando la coppia di serraggio prescritta.\n\n---\n\n## Specifiche di Fissaggio\n\n| Parametro | Valore |\n|---|---|\n| **Part Number (P/N)** | AX-990-B |\n| **Componente** | Bullone Esagonale M12 |\n| **Coppia di serraggio** | 45 Nm |\n\n---\n\n## Informazioni dai Disegni Tecnici\n\nLa documentazione include **tre disegni tecnici** rilevanti per questa operazione:\n\n- **Disegno di orientamento (Part AX-990-B):** Mostra il supporto motore come una piastra rettangolare grigia con un foro circolare. Una **freccia curva rossa** indica il **verso di rotazione/orientamento corretto** del componente prima dell'installazione. Un **indicatore triangolare grigio** laterale funge da riferimento direzionale. È essenziale seguire questa indicazione per il corretto posizionamento sul basamento.\n\n- **Disegno della flangia circolare (P/N: WH-77):** Mostra una vista frontale del supporto con **foro centrale** e **quattro fori periferici** di fissaggio. Una **freccia/linea di richiamo blu** evidenzia il foro in posizione inferiore sinistra, etichettato **\"P/N: WH-77\"**, che rappresenta il **foro primario di riferimento** per l'orientamento corretto del supporto.\n\n- **Tabella tecnica:** Riporta i dati del componente di fissaggio (P/N AX-990-B, Bullone Esagonale M12, coppia 45 Nm).\n\n---\n\n## Note Operative\n\n- Consultare **sempre** i disegni tecnici prima del montaggio per verificare l'orientamento corretto.\n- Il foro evidenziato con callout **WH-77** nel disegno della flangia serve come **riferimento di posizionamento** per evitare errori di montaggio.\n- Applicare la coppia di serraggio di **45 Nm** con chiave dinamometrica calibrata.",
+    "sources": [
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": null,
+        "preview": "DOCUMENTO TECNICO - USO INTERNO KPMG\nManuale Operativo di Assemblaggio\nModello: Prototype-V6 | Settore: Automotive Assembly Line\nOperazione ID: OP-5520-X\nSezione 1: Fissaggio Supporto Motore Primario\nIn questa fase, l'operatore deve posizionare il su"
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": null,
+        "preview": ": OP-7712-W\nSezione 2: Allineamento Mozzo Ruota Anteriore\nIl componente deve essere centrato rispetto all'asse di rotazione. Verificare l'integrità dei fori di\nalloggiamento prima di inserire i perni. Istruzione Visiva: Consultare l'indicatore grafic"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/istruzioni_montaggio_automotive_v2_p1_region1.png",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 1,
+        "preview": "L’immagine mostra una **tabella tecnica** a due colonne, parte della **Sezione 1: Fissaggio Supporto Motore Primario** del manuale di assemblaggio automotive.\n\n### 1. Tipo di contenuto\n- **Tabella / s"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/istruzioni_montaggio_automotive_v2_p1_region2.png",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 1,
+        "preview": "**Analisi dell’immagine – Pagina 1, “istruzioni_montaggio_automotive_v2.pdf”**\n\n1. **Tipo di contenuto**  \n   È un **disegno tecnico/diagramma di orientamento per assemblaggio meccanico**, non una fot"
+      },
+      {
+        "type": "image",
+        "path": "http://localhost:8000/images/istruzioni_montaggio_automotive_v2_p1_bitmap2.png",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 1,
+        "preview": "Ecco l’analisi tecnica dell’immagine, integrata con il contesto della pagina 1 del documento.\n\n## 1. Tipo di contenuto\nSi tratta di un **disegno tecnico / schema di montaggio meccanico semplificato**,"
+      }
+    ],
+    "timestamp": "2026-05-04T13:55:43.741Z"
+  }
+]
