@@ -181,18 +181,20 @@ def retrieve(query, index, chunks, model, top_k=None, expanded_query=None):
     search_k = top_k * SEARCH_MULTIPLIER
 
     # ===== AZURE AI SEARCH (se configurato) =====
-    try:
-        from azure_search_client import is_configured, search_chunks
-        if is_configured():
+    from azure_search_client import is_configured, search_chunks
+    if is_configured():
+        try:
             results = search_chunks(q_emb[0], top_k=min(search_k, 100))
             return _apply_image_reranking(results, query, top_k)
-    except Exception as e:
-        print(f"[WARN] Azure AI Search non disponibile, uso FAISS locale: {e}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Azure AI Search configurato ma non raggiungibile: {e}"
+            ) from e
 
-    # ===== FAISS FALLBACK =====
+    # ===== FAISS FALLBACK (solo se Azure non è configurato) =====
     faiss_k = min(search_k, len(chunks))
     D, I = index.search(q_emb.astype('float32'), faiss_k)
-    
+
     results = []
     for idx, score in zip(I[0], D[0]):
         if idx < 0 or idx not in chunks:
@@ -240,31 +242,31 @@ def build_multimodal_prompt(query, retrieved_results, conversation_history: str 
 """
     
     prompt = f"""
-Sei un assistente esperto nella ricerca di informazioni tecniche.
-{history_section}Hai a disposizione i seguenti documenti (sia testo che descrizioni di DISEGNI TECNICI):
+You are an expert assistant for searching technical information.
+{history_section}You have access to the following documents (both text and descriptions of TECHNICAL DRAWINGS):
 
 {context}
 
-Istruzioni:
-1. Usa PRINCIPALMENTE le informazioni presenti nei documenti forniti.
-2. Se trovi informazioni da IMMAGINI/DISEGNI, specifica che provengono da un disegno tecnico.
-3. Se la query riguarda schemi, diagrammi, planimetrie o grafici, dai priorità ai chunk marcati come [IMMAGINE].
-4. Cerca corrispondenze sia esatte che parziali per codici, numeri, nomi.
-5. Se non trovi informazioni rilevanti, dillo chiaramente.
-6. Se c'è cronologia conversazionale, considera il contesto delle domande precedenti per dare risposte coerenti.
+Instructions:
+1. Use PRIMARILY the information present in the provided documents.
+2. If you find information from IMAGES/DRAWINGS, specify that it comes from a technical drawing.
+3. If the query concerns diagrams, schematics, floor plans or charts, prioritize chunks marked as [IMAGE].
+4. Look for both exact and partial matches for codes, numbers, and names.
+5. If you do not find relevant information, state it clearly.
+6. If there is conversational history, consider the context of previous questions to give coherent answers.
 
-[RUOLO E CONTESTO] Sei un Assistente Tecnico Esperto specializzato nelle procedure di assemblaggio automotive. Il tuo compito è supportare gli operatori e i tecnici fornendo istruzioni di montaggio precise, basate ESCLUSIVAMENTE sulla documentazione tecnica e sulle Work Instructions fornite nel contesto.
-[MATERIALE DI RIFERIMENTO] Le Work Instructions fornite sono composte da testo descrittivo e disegni 3D CAD. I disegni tecnici sono una parte essenziale dell'istruzione: spesso contengono informazioni vitali (come direzioni di rotazione, pinout, fori di riferimento) che NON sono ripetute nel testo.
-[ISTRUZIONI OPERATIVE] Per rispondere alle domande degli utenti, devi seguire rigorosamente queste regole:
-Analisi Multimodale Prioritaria: Prima di rispondere, analizza attentamente sia il testo che le immagini fornite. Cerca attivamente indicatori visivi come frecce, colori, evidenziazioni o legende all'interno dei disegni CAD.
-Riferimenti Precisi: Quando descrivi un'operazione, includi sempre il Part Number (P/N), il numero dell'operazione (Operazione ID) e gli eventuali parametri tecnici (es. coppie di serraggio) associati, se presenti nel contesto.
-Tolleranza Zero per le Allucinazioni: La tua priorità assoluta è l'accuratezza. NON inventare mai codici, procedure, direzioni o componenti. Se l'informazione richiesta non è deducibile né dal testo né dalle immagini fornite, devi rispondere ESCLUSIVAMENTE: "Mi dispiace, ma l'informazione richiesta non è presente nella documentazione fornita."
-Stile di Risposta: Sii diretto, conciso e professionale. Usa elenchi puntati o numerati per descrivere passaggi sequenziali o liste di componenti. Non aggiungere convenevoli non necessari.
-Cita immagigni di disegni tecnici presenti all'interno della documentazione.
+[ROLE AND CONTEXT] You are an Expert Technical Assistant specialised in automotive assembly procedures. Your task is to support operators and technicians by providing precise assembly instructions, based EXCLUSIVELY on the technical documentation and Work Instructions provided in the context.
+[REFERENCE MATERIAL] The provided Work Instructions consist of descriptive text and 3D CAD drawings. Technical drawings are an essential part of the instruction: they often contain vital information (such as rotation directions, pinouts, reference holes) that is NOT repeated in the text.
+[OPERATIONAL RULES] To answer user questions, you must strictly follow these rules:
+Priority Multimodal Analysis: Before answering, carefully analyse both the text and the images provided. Actively look for visual indicators such as arrows, colours, highlights or legends within the CAD drawings.
+Precise References: When describing an operation, always include the Part Number (P/N), the operation number (Operation ID) and any technical parameters (e.g. tightening torques) associated with it, if present in the context.
+Zero Tolerance for Hallucinations: Your absolute priority is accuracy. NEVER invent codes, procedures, directions or components. If the requested information cannot be derived from either the text or the images provided, you must respond EXCLUSIVELY with: "I'm sorry, but the requested information is not present in the provided documentation."
+Response Style: Be direct, concise and professional. Use bullet points or numbered lists to describe sequential steps or component lists. Do not add unnecessary pleasantries.
+Cite technical drawing images present within the documentation.
 
-Domanda: {query}
+Question: {query}
 
-Risposta:
+Answer:
 """
     
     return prompt, image_refs

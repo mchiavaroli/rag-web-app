@@ -1,1 +1,51 @@
-[]
+[
+  {
+    "id": "msg_1777975325430_user",
+    "role": "user",
+    "content": "Operation ID OP-7712-W",
+    "timestamp": "2026-05-05T10:02:05.430Z"
+  },
+  {
+    "id": "msg_1777975335558_assistant",
+    "role": "assistant",
+    "content": "# Operation ID: OP-7712-W\n\nBased on the provided documentation, here is the information available for this operation:\n\n## Associated Unit\n- **Unit:** WH-77-UNIT\n\n## Assembly Instructions\n\n1. **Component Centering:** The component must be centered with respect to the rotation axis.\n2. **Pre-insertion Check:** Verify the integrity of the housing holes before inserting the pins.\n3. **Visual Instruction:** Consult the alignment reference (as indicated in the visual instruction documentation).\n\n## Important Notes\n- **Technical Drawing:** The documentation references a visual instruction for alignment verification. Operators should consult the associated technical drawing for precise alignment details (arrows, reference points, positioning indicators).\n\n---\n\n⚠️ **Limitation:** The provided documentation excerpts for OP-7712-W are partial. Specific technical parameters (e.g., tightening torques, exact P/N of sub-components, detailed sequential steps) are not fully available in the retrieved context. If you need additional details (torque values, specific tooling, or complete step-by-step procedures), please refer to the full document **istruzioni_montaggio_automotive_v2.pdf** or request further documentation.",
+    "sources": [
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 2,
+        "preview": "[PAGEHEADER] Operazione ID: OP-7712-W"
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 2,
+        "preview": "WH-77-UNIT"
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 2,
+        "preview": "Istruzione Visiva: Consultare\nallineamento."
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/advanced_work_instructions (1).pdf",
+        "title": "advanced_work_instructions (1).pdf",
+        "page": 2,
+        "preview": "OP_ID: OP-910-ORI"
+      },
+      {
+        "type": "pdf",
+        "path": "http://localhost:8000/docs/istruzioni_montaggio_automotive_v2.pdf",
+        "title": "istruzioni_montaggio_automotive_v2.pdf",
+        "page": 2,
+        "preview": "Il componente deve essere centrato rispetto all'asse di rotazione. Verificare l'integrità dei fori di alloggiamento prima di inserire i perni."
+      }
+    ],
+    "timestamp": "2026-05-05T10:02:15.558Z"
+  }
+]

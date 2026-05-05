@@ -195,24 +195,58 @@ def call_llm_with_image(config: dict, base64_image: str, media_type: str, text_p
         return resp.choices[0].message.content
 
     elif provider == 'mistral':
+        # Mistral Large via endpoint OpenAI-compatible
         from openai import OpenAI
         client = OpenAI(
             base_url=config['endpoint'],
             api_key=config['api_key'],
         )
-        # Mistral API non supporta immagini direttamente, fallback a solo testo
         completion = client.chat.completions.create(
             model=config['deployment_name'],
             messages=[
-                {"role": "system", "content": "Se il prompt contiene un'immagine, rispondi che non è supportata."},
-                {"role": "user", "content": text_prompt},
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{base64_image}"},
+                    },
+                    {"type": "text", "text": text_prompt},
+                ]},
             ],
             max_tokens=config.get('max_tokens', 4096),
             temperature=config.get('temperature', 0),
         )
         return completion.choices[0].message.content
 
+    elif provider == 'mistral-ocr':
+        # Mistral Document AI — API OCR nativa (non chat completions)
+        import requests
+        ocr_url = config['endpoint'].rstrip('/')
+        payload = {
+            'model': config['deployment_name'],
+            'document': {
+                'type': 'image_url',
+                'image_url': f'data:{media_type};base64,{base64_image}',
+            },
+            'include_image_base64': False,
+        }
+        headers = {
+            'Authorization': f'Bearer {config["api_key"]}',
+            'Content-Type': 'application/json',
+        }
+        resp = requests.post(ocr_url, json=payload, headers=headers, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        # Combina il markdown di tutte le pagine restituite
+        pages = data.get('pages', [])
+        if pages:
+            ocr_text = '\n\n'.join(p.get('markdown', '') for p in pages if p.get('markdown'))
+        else:
+            ocr_text = data.get('text', '') or str(data)
+        # Arricchisci con il prompt di contesto (testo pagina passato da analyze_image_with_context)
+        return f"[Mistral Document AI - OCR]\n{ocr_text}\n\n[Prompt analisi]\n{text_prompt}"
+
     else:
         raise ValueError(
-            f"Provider LLM non supportato: '{provider}'. Valori validi: 'anthropic', 'openai', 'mistral'."
+            f"Provider LLM non supportato: '{provider}'. Valori validi: 'anthropic', 'openai', 'mistral', 'mistral-ocr'."
         )

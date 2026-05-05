@@ -17,17 +17,17 @@ import faiss
 from PIL import Image
 import fitz  # PyMuPDF per estrazione immagini - importato DOPO sentence-transformers
 
-from config import (MODEL_PROMPT, CHUNK_SIZE, CHUNK_OVERLAP,
+from config import (MODEL_PROMPT, MODEL_IMAGE_ANALYSE, CHUNK_SIZE, CHUNK_OVERLAP,
                     BATCH_SIZE, MIN_IMAGE_SIZE, EMBEDDING_MODEL,
                     get_index_path, get_metadata_path, get_chunks_path, get_images_folder,
                     ensure_output_dir)
-from llm_client import call_llm_text
+from llm_client import call_llm_text, call_llm_with_image
 
 # Import del nuovo modulo Document Intelligence
 from document_intelligence_extractor import DocumentIntelligenceExtractor
 
-# Import Azure AI Vision per analisi immagini
-from build_index_vision import analyze_image_with_azure_vision
+# Import Azure AI Vision per analisi immagini - tenuto per compatibilità ma non usato nel path principale
+# from build_index_vision import analyze_image_with_azure_vision
 
 
 # ===== IMPORTA FUNZIONI ORIGINALI =====
@@ -268,7 +268,7 @@ def build_index_with_document_intelligence(
             
             for table in di_result['tables']:
                 # Le tabelle vengono indicizzate come chunk di testo speciali
-                table_text = f"[TABELLA - Pagina {table['page']}]\n{table['text']}"
+                table_text = f"[TABLE - Page {table['page']}]\n{table['text']}"
                 
                 # Contestualizza la tabella
                 if use_text_contextualization:
@@ -329,11 +329,12 @@ def build_index_with_document_intelligence(
             # Analizza ogni immagine
             image_descriptions = []
 
-            # ===== ANALISI IMMAGINI CON AZURE AI VISION =====
-            print(f"     Analisi immagini con Azure AI Vision...")
-            for img in tqdm(images, desc="     - Analisi immagini (Vision)", leave=False):
+            # ===== ANALISI IMMAGINI CON LLM (MODEL_IMAGE_ANALYSE) =====
+            # Usa il modello vision configurato in config.py con contesto della pagina
+            print(f"     Analisi immagini con LLM vision (MODEL_IMAGE_ANALYSE)...")
+            for img in tqdm(images, desc="     - Analisi immagini (LLM)", leave=False):
                 page_text = page_texts.get(img['page'], '')
-                description = analyze_image_with_azure_vision(
+                description = analyze_image_with_context(
                     img['image_path'],
                     img['page'], doc_name, page_text
                 )

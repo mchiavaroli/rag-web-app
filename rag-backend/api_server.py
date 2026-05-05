@@ -22,7 +22,7 @@ import uvicorn
 from config import (
     get_index_path, get_chunks_path, get_images_folder, get_metadata_path,
     OUTPUT_DIR, EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE,
-    MIN_IMAGE_SIZE, ensure_output_dir
+    MIN_IMAGE_SIZE, ensure_output_dir, TEXT_SOURCE_SCORE_THRESHOLD
 )
 
 # ============================================================
@@ -85,6 +85,9 @@ app.mount("/docs", StaticFiles(directory=DOCS_DIR), name="docs")
 def _run_indexing() -> None:
     """Esegue la build dell'indice in un thread separato."""
     global indexing_state
+    from rag_logger import RAGLogger
+    logger = RAGLogger(log_dir=os.path.join(_BASE_DIR, "output", "logs"))
+
     try:
         indexing_state["status"] = "building"
         indexing_state["started_at"] = datetime.now().isoformat()
@@ -107,6 +110,8 @@ def _run_indexing() -> None:
             indexing_state["message"] = "Nessun documento da indicizzare"
             return
 
+        log_context = logger.log_indexing_start(docs)
+
         build_index_with_document_intelligence(
             docs,
             embed_model_name=EMBEDDING_MODEL,
@@ -123,8 +128,9 @@ def _run_indexing() -> None:
 
         # Leggi le statistiche dall'indice appena creato
         chunks_path = get_chunks_path()
+        all_chunks: dict = {}
+        images_info = []
         if os.path.exists(chunks_path):
-            all_chunks: dict = {}
             with open(chunks_path, "r", encoding="utf-8") as f:
                 for line in f:
                     obj = json.loads(line)
@@ -132,6 +138,47 @@ def _run_indexing() -> None:
             indexing_state["total_chunks"] = len(all_chunks)
             indexing_state["text_chunks"] = sum(1 for c in all_chunks.values() if c["type"] == "text")
             indexing_state["image_chunks"] = sum(1 for c in all_chunks.values() if c["type"] == "image")
+            images_info = [
+                {"path": c["image_path"], "page": c.get("page"), "size": [], "type": "image"}
+                for c in all_chunks.values()
+                if c["type"] == "image" and c.get("image_path")
+            ]
+
+        # Calcola numero totale pagine
+        total_pages = sum(
+            len(doc.get("di_result", {}).get("pages", [])) if doc.get("di_result") else 0
+            for doc in docs
+        )
+
+        # Recupera model info dalla config
+        try:
+            from config import MODEL_IMAGE_ANALYSE
+            model_name = MODEL_IMAGE_ANALYSE.get("deployment_name", str(MODEL_IMAGE_ANALYSE)) if isinstance(MODEL_IMAGE_ANALYSE, dict) else str(MODEL_IMAGE_ANALYSE)
+        except Exception:
+            model_name = "unknown"
+
+        logger.log_indexing_complete(
+            context=log_context,
+            document_info={
+                "filename": docs[0]["path"] if len(docs) == 1 else f"{len(docs)} documenti",
+                "pages": total_pages,
+                "file_type": "multi" if len(docs) > 1 else os.path.splitext(docs[0]["path"])[1],
+            },
+            chunks_info={
+                "total": len(all_chunks),
+                "text": indexing_state.get("text_chunks", 0),
+                "images": indexing_state.get("image_chunks", 0),
+            },
+            images_info=images_info,
+            llm_calls_info={
+                "contextualization": indexing_state.get("text_chunks", 0),
+                "image_analysis": indexing_state.get("image_chunks", 0),
+                "total_calls": len(all_chunks),
+            },
+            index_path=get_index_path(),
+            model_info={"text_model": model_name, "image_model": model_name},
+        )
+        print("📝 Log indicizzazione salvato in: output/logs/indexing_logs.jsonl")
 
         indexing_state["status"] = "ready"
         indexing_state["completed_at"] = datetime.now().isoformat()
@@ -477,10 +524,10 @@ async def query(request: QueryRequest) -> dict:
     sources = []
     seen: set = set()
     
-    # Aggiungi fonti testo
+    # Aggiungi fonti testo (solo chunk con score sufficiente)
     for result in retrieved:
         chunk = result["chunk"]
-        if chunk["type"] == "text":
+        if chunk["type"] == "text" and result["score"] >= TEXT_SOURCE_SCORE_THRESHOLD:
             key = f"text_{chunk['source']}_{chunk.get('chunk_id', '')}"
             if key not in seen:
                 seen.add(key)
@@ -574,7 +621,7 @@ async def compare(request: CompareRequest) -> dict:
 
         for result in retrieved:
             chunk = result["chunk"]
-            if chunk["type"] == "text":
+            if chunk["type"] == "text" and result["score"] >= TEXT_SOURCE_SCORE_THRESHOLD:
                 key = f"text_{chunk['source']}_{chunk.get('chunk_id', '')}"
                 if key not in seen:
                     seen.add(key)

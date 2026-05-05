@@ -182,29 +182,29 @@ def analyze_image_with_context(image_path, page_num, source_doc, page_text=None)
             page_text_preview += "..."
         context_section = f"""
 
-📄 CONTESTO DELLA PAGINA {page_num}:
+📄 PAGE {page_num} CONTEXT:
 {page_text_preview}
 
-⚠️ Usa questo contesto per identificare l'argomento specifico dell'immagine. 
-Se il testo menziona argomenti, monumenti, codici o concetti tecnici, 
-FOCALIZZATI su quelli nell'analisi dell'immagine.
+⚠️ Use this context to identify the specific subject of the image.
+If the text mentions topics, codes or technical concepts,
+FOCUS on those in the image analysis.
 """
 
-    prompt = f"""Sei un esperto ingegnere che analizza disegni tecnici, schemi, diagrammi e grafici.
+    prompt = f"""You are an expert engineer analysing technical drawings, schematics, diagrams and charts.
 
-Analizza questa immagine dalla pagina {page_num} del documento "{source_doc}".{context_section}
+Analyse this image from page {page_num} of the document "{source_doc}".{context_section}
 
-Focalizzati su:
-1. Tipo di contenuto (schema elettrico, diagramma di flusso, grafico, planimetria, tabella, foto tecnica, etc.)
-2. **ARGOMENTO SPECIFICO**: identifica l'argomento principale basandoti sul contesto della pagina
-3. Componenti principali e loro identificatori (codici, sigle, nomi)
-4. Valori numerici, misure, specifiche tecniche visibili
-5. Connessioni, relazioni, flussi tra elementi
-6. Testo presente nell'immagine (etichette, legende, annotazioni)
-7. Contesto tecnico e scopo del disegno
+Focus on:
+1. Content type (electrical schematic, flow diagram, chart, floor plan, table, technical photo, etc.)
+2. **SPECIFIC SUBJECT**: identify the main topic based on the page context
+3. Main components and their identifiers (codes, abbreviations, names)
+4. Numerical values, measurements, visible technical specifications
+5. Connections, relationships, flows between elements
+6. Text present in the image (labels, legends, annotations)
+7. Technical context and purpose of the drawing
 
-Se il contesto della pagina menziona argomenti specifici, METTILI IN EVIDENZA nella descrizione.
-Fornisci una descrizione completa e ricercabile che permetta di recuperare questa immagine con query specifiche."""
+If the page context mentions specific topics, HIGHLIGHT them in the description.
+Provide a complete, searchable description that allows this image to be retrieved with specific queries."""
 
     ext = os.path.splitext(image_path)[1].lower()
     media_type_map = {
@@ -365,7 +365,7 @@ Return ONLY valid JSON with format:
                 contextualized_chunk = f"CONTEXT: {context}\n\nCONTENT: {chunk}" if context else f"CONTENT: {chunk}"
                 contextualized.append(contextualized_chunk)
 
-            print(f"  ✓ Contestualizzati chunk testo {i}-{i+len(batch)}")
+            print(f"  ✓ Contextualised text chunks {i}-{i+len(batch)}")
 
         except Exception as e:
             print(f"  [WARN] Errore contestualizzazione batch {i}: {e}")
@@ -387,7 +387,7 @@ def contextualize_image_descriptions(image_descriptions, doc_name):
         page = img_data['page']
         img_path = img_data['image_path']
 
-        context = f"Immagine tecnica dalla pagina {page} del documento '{doc_name}', salvata come {os.path.basename(img_path)}."
+        context = f"Technical image from page {page} of document '{doc_name}', saved as {os.path.basename(img_path)}."
         contextualized_desc = f"CONTEXT: {context}\n\nCONTENT: {description}"
 
         contextualized.append({
