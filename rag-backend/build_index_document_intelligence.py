@@ -456,10 +456,13 @@ def build_index_with_document_intelligence(
             print("[6] Upload su Azure AI Search...")
             create_or_update_index()
             azure_upload_chunks(all_chunks, embeddings)
+            print(f"✅ Azure AI Search: {len(all_chunks)} chunk con embedding ({embeddings.shape[1]} dim) caricati")
         else:
             print("ℹ️  Azure AI Search non configurato — indice solo locale (FAISS).")
     except Exception as e:
+        import traceback
         print(f"[WARN] Upload Azure AI Search fallito (indice locale disponibile): {e}")
+        traceback.print_exc()
 
     return index_path, meta_path
 
