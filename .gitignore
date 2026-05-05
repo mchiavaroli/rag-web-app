@@ -1,2 +1,5 @@
 rag-web-app/data/chat-history.json
 rag-web-app/data/session.json
+
+# Wiki (generated markdown files)
+rag-backend/wiki/

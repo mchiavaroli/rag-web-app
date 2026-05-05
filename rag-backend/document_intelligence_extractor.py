@@ -5,6 +5,7 @@ Integra il servizio di Document Intelligence nel sistema RAG per analisi avanzat
 """
 import os
 import time
+import tempfile
 from typing import Dict, List, Tuple, Optional
 from azure.ai.formrecognizer import DocumentAnalysisClient
 from azure.core.credentials import AzureKeyCredential
@@ -60,17 +61,43 @@ class DocumentIntelligenceExtractor:
         os.makedirs(output_folder, exist_ok=True)
         
         print(f"📄 Analisi PDF con Document Intelligence: {pdf_path}")
-        
-        # Analizza documento
-        # Nota: la feature "figures" richiede tier S0 (a pagamento)
-        # Con tier F0 (gratuito), le immagini sono estratte con PyMuPDF
-        with open(pdf_path, "rb") as f:
-            poller = self.client.begin_analyze_document(
-                model_id="prebuilt-layout",
-                document=f
-            )
-        
-        result = poller.result()
+
+        # Tronca il PDF alle prime MAX_PAGES pagine prima di inviare a DI
+        MAX_PAGES = 30
+        import fitz as _fitz
+        _src = _fitz.open(pdf_path)
+        _total = _src.page_count
+        _src.close()
+
+        if _total > MAX_PAGES:
+            print(f"   ℹ️  PDF con {_total} pagine: vengono usate solo le prime {MAX_PAGES}.")
+            _tmp = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+            _tmp_path = _tmp.name
+            _tmp.close()
+            _src2 = _fitz.open(pdf_path)
+            _sub = _fitz.open()
+            _sub.insert_pdf(_src2, from_page=0, to_page=MAX_PAGES - 1)
+            _sub.save(_tmp_path)
+            _sub.close()
+            _src2.close()
+            _effective_path = _tmp_path
+        else:
+            _tmp_path = None
+            _effective_path = pdf_path
+
+        try:
+            with open(_effective_path, "rb") as f:
+                poller = self.client.begin_analyze_document(
+                    model_id="prebuilt-layout",
+                    document=f
+                )
+            result = poller.result()
+        finally:
+            if _tmp_path:
+                try:
+                    os.unlink(_tmp_path)
+                except OSError:
+                    pass
         
         # Estrai informazioni
         filename = os.path.splitext(os.path.basename(pdf_path))[0]
@@ -98,6 +125,124 @@ class DocumentIntelligenceExtractor:
             'total_pages': len(result.pages) if result.pages else 0
         }
     
+    def _extract_in_batches(self, pdf_path: str, output_folder: str, batch_size: int) -> Dict:
+        """
+        Spezza il PDF in batch di `batch_size` pagine, elabora ciascuno con DI
+        e unisce i risultati aggiustando i numeri di pagina.
+        """
+        import fitz
+
+        filename = os.path.splitext(os.path.basename(pdf_path))[0]
+        src_doc = fitz.open(pdf_path)
+        total_pages = src_doc.page_count
+
+        merged = {
+            'text_chunks': [],
+            'images': [],
+            'tables': [],
+            'pages': [],
+            'total_pages': total_pages,
+        }
+
+        batch_num = 0
+        for start in range(0, total_pages, batch_size):
+            end = min(start + batch_size, total_pages)
+            batch_num += 1
+            print(f"   📦 Batch {batch_num}: pagine {start+1}–{end} di {total_pages}...")
+
+            # Crea PDF temporaneo con le pagine del batch
+            tmp_pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+            tmp_path = tmp_pdf.name
+            tmp_pdf.close()
+
+            try:
+                sub_doc = fitz.open()
+                sub_doc.insert_pdf(src_doc, from_page=start, to_page=end - 1)
+                sub_doc.save(tmp_path)
+                sub_doc.close()
+
+                # Chiama DI sul PDF batch
+                with open(tmp_path, "rb") as f:
+                    poller = self.client.begin_analyze_document(
+                        model_id="prebuilt-layout",
+                        document=f
+                    )
+                result = poller.result()
+
+                page_offset = start  # numero pagine da aggiungere agli indici
+
+                # Estrai e correggi offset pagine
+                batch_pages = self._extract_pages_info_with_offset(result, filename, page_offset)
+                merged['pages'].extend(batch_pages)
+
+                batch_chunks = self._extract_text_chunks_with_offset(result, filename, page_offset)
+                merged['text_chunks'].extend(batch_chunks)
+
+                batch_images = self._extract_figures_with_offset(
+                    result, tmp_path, output_folder, filename, page_offset, src_doc, start
+                )
+                merged['images'].extend(batch_images)
+
+                batch_tables = self._extract_tables_with_offset(result, filename, page_offset)
+                merged['tables'].extend(batch_tables)
+
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+        src_doc.close()
+        print(f"   ✅ Elaborazione completata: {len(merged['text_chunks'])} chunk, "
+              f"{len(merged['images'])} immagini, {len(merged['tables'])} tabelle")
+        return merged
+
+    def _extract_pages_info_with_offset(self, result, filename: str, page_offset: int) -> List[Dict]:
+        """Come _extract_pages_info ma aggiunge page_offset ai numeri di pagina."""
+        pages = []
+        for page_idx, page in enumerate(result.pages):
+            page_num = page_idx + 1 + page_offset
+            page_text = [line.content for line in (page.lines or [])]
+            pages.append({
+                'page_number': page_num,
+                'width': page.width,
+                'height': page.height,
+                'unit': page.unit,
+                'text': '\n'.join(page_text),
+                'line_count': len(page.lines) if page.lines else 0,
+                'word_count': len(page.words) if page.words else 0,
+                'source_doc': filename,
+            })
+        return pages
+
+    def _extract_text_chunks_with_offset(self, result, filename: str, page_offset: int) -> List[Dict]:
+        """Come _extract_text_chunks ma corregge i numeri di pagina."""
+        chunks = self._extract_text_chunks(result, filename)
+        for chunk in chunks:
+            if 'page' in chunk and chunk['page'] is not None:
+                chunk['page'] = chunk['page'] + page_offset
+        return chunks
+
+    def _extract_tables_with_offset(self, result, filename: str, page_offset: int) -> List[Dict]:
+        """Come _extract_tables ma corregge i numeri di pagina."""
+        tables = self._extract_tables(result, filename)
+        for table in tables:
+            if 'page' in table and table['page'] is not None:
+                table['page'] = table['page'] + page_offset
+        return tables
+
+    def _extract_figures_with_offset(self, result, tmp_pdf_path: str, output_folder: str,
+                                     filename: str, page_offset: int,
+                                     src_doc, batch_start: int) -> List[Dict]:
+        """
+        Estrae figure dal batch e corregge i numeri di pagina.
+        Usa le pagine del documento originale (non del tmp) per l'estrazione raster.
+        """
+        # _extract_figures usa tmp_pdf_path per aprire il PDF e rasterizzare
+        # i numeri di pagina nel result sono relativi al batch (1-based)
+        images = self._extract_figures(result, tmp_pdf_path, output_folder, filename,
+                                       page_offset=page_offset)
+        return images
     def _save_di_log(self, result, filename: str, output_folder: str):
         """Salva il log completo dell'output di Document Intelligence"""
         import json
@@ -291,7 +436,8 @@ class DocumentIntelligenceExtractor:
         
         return chunks
     
-    def _extract_figures(self, result, pdf_path: str, output_folder: str, filename: str) -> List[Dict]:
+    def _extract_figures(self, result, pdf_path: str, output_folder: str, filename: str,
+                          page_offset: int = 0) -> List[Dict]:
         """
         Estrae figure/immagini identificate da Document Intelligence
         
@@ -307,7 +453,8 @@ class DocumentIntelligenceExtractor:
         if not figures:
             # Fallback: usa PyMuPDF per estrazione immagini standard
             print(f"     ℹ️  'figures' non disponibile, uso estrazione PyMuPDF...")
-            return self._extract_images_with_pymupdf(pdf_path, output_folder, filename)
+            return self._extract_images_with_pymupdf(pdf_path, output_folder, filename,
+                                                     page_offset=page_offset)
         
         # Usa PyMuPDF per estrarre le immagini effettive dalle regioni identificate
         import fitz
@@ -319,8 +466,8 @@ class DocumentIntelligenceExtractor:
                 continue
                 
             region = figure.bounding_regions[0]
-            page_num = region.page_number
-            page = doc[page_num - 1]
+            page_num = region.page_number + page_offset
+            page = doc[region.page_number - 1]  # indice locale nel PDF batch
             
             # Converti le coordinate (Document Intelligence usa punti normalizzati)
             # Il formato polygon è [Point, Point, Point, Point] dove Point ha x, y
@@ -368,7 +515,8 @@ class DocumentIntelligenceExtractor:
         doc.close()
         return images
     
-    def _extract_images_with_pymupdf(self, pdf_path: str, output_folder: str, filename: str, min_size: int = 100) -> List[Dict]:
+    def _extract_images_with_pymupdf(self, pdf_path: str, output_folder: str, filename: str,
+                                      min_size: int = 100, page_offset: int = 0) -> List[Dict]:
         """
         Fallback: estrae immagini usando PyMuPDF quando Document Intelligence
         non fornisce l'attributo 'figures'
@@ -397,14 +545,14 @@ class DocumentIntelligenceExtractor:
                     if width < min_size or height < min_size:
                         continue
                     
-                    img_filename = f"{filename}_p{page_num+1}_img{img_idx+1}.{image_ext}"
+                    img_filename = f"{filename}_p{page_num+1+page_offset}_img{img_idx+1}.{image_ext}"
                     img_path = os.path.join(output_folder, img_filename)
                     
                     with open(img_path, "wb") as f:
                         f.write(image_bytes)
                     
                     images.append({
-                        'page': page_num + 1,
+                        'page': page_num + 1 + page_offset,
                         'image_path': img_path,
                         'size': (width, height),
                         'source_doc': filename,

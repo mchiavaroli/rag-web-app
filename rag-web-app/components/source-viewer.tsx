@@ -153,7 +153,35 @@ function PdfSource({ source }: { source: Source }) {
   )
 }
 
+/** Mostra una fonte wiki come badge con categoria e titolo */
+function WikiSource({ source }: { source: Source }) {
+  // path es. "sources/advanced-work-instructions-1.md"
+  const parts = source.path.split('/')
+  const category = parts.length >= 2 ? parts[parts.length - 2] : ''
+  const filename = parts[parts.length - 1] || ''
+  const titleFromPath = filename.replace('.md', '').replace(/-/g, ' ')
+  const label = source.title || titleFromPath || 'Wiki'
+
+  const categoryLabel: Record<string, string> = {
+    sources: 'Fonte',
+    concepts: 'Concetto',
+    procedures: 'Procedura',
+    components: 'Componente',
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-medium capitalize">
+      <FileText className="h-3 w-3 shrink-0" />
+      {categoryLabel[category] && (
+        <span className="text-primary/60 font-normal">{categoryLabel[category]}:</span>
+      )}
+      {label}
+    </span>
+  )
+}
+
 export function SourceViewer({ source }: SourceViewerProps) {
   if (source.type === 'image') return <ImageSource source={source} />
+  if (source.type === 'wiki') return <WikiSource source={source} />
   return <PdfSource source={source} />
 }

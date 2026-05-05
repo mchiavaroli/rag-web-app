@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react'
 import useSWR, { mutate } from 'swr'
 import { FileText, Upload, Trash2, File, Loader2, RefreshCw, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { LogViewer } from '@/components/log-viewer'
 import { IndexingLogViewer } from '@/components/indexing-log-viewer'
 import { Card } from '@/components/ui/card'
 import type { Document, IndexStatus } from '@/lib/types'
@@ -177,7 +176,6 @@ export function DocumentSidebar() {
       {/* Indexing Log Viewer Button */}
       <div className="px-4 pt-3 pb-1 flex flex-col gap-2">
         <IndexingLogViewer />
-        <LogViewer />
       </div>
 
       {/* Upload Area */}
