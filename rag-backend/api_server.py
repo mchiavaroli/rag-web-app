@@ -378,6 +378,13 @@ async def wiki_pages() -> dict:
     return {"pages": list_wiki_pages()}
 
 
+@app.get("/api/wiki/graph")
+async def wiki_graph() -> dict:
+    """Restituisce nodi e archi della wiki per visualizzazione a grafo."""
+    from wiki_manager import get_wiki_graph
+    return get_wiki_graph()
+
+
 @app.get("/api/wiki/pages/{category}/{filename}")
 async def wiki_page(category: str, filename: str) -> dict:
     """Legge una singola pagina wiki."""

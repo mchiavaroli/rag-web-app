@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
 import {
   BookOpen, FileText, Upload, Search, AlertTriangle,
-  RefreshCw, Trash2, ChevronRight, Layers, Wrench, Box, BookMarked, ImageIcon, ZoomIn, GraduationCap
+  RefreshCw, Trash2, ChevronRight, Layers, Wrench, Box, BookMarked, ImageIcon, ZoomIn, GraduationCap, Link2, Share2
 } from 'lucide-react'
+import WikiGraph from '@/components/wiki-graph'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,6 +15,15 @@ import remarkGfm from 'remark-gfm'
 import type { WikiStatus, WikiPage } from '@/lib/types'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
+
+/** Converte [[slug]] in link markdown navigabili */
+function processWikiLinks(content: string, pages: WikiPage[]): string {
+  return content.replace(/\[\[([^\]]+)\]\]/g, (_, slug) => {
+    const page = pages.find(p => p.name === slug + '.md' || p.name === slug)
+    const title = page?.title ?? slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    return `[${title}](#wiki-${slug})`
+  })
+}
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   sources: <BookMarked className="h-3.5 w-3.5" />,
@@ -43,6 +53,7 @@ export default function WikiViewer() {
   const [learnTitle, setLearnTitle] = useState('')
   const [isLearning, setIsLearning] = useState(false)
   const [learnResult, setLearnResult] = useState<any>(null)
+  const [viewMode, setViewMode] = useState<'pages' | 'graph'>('pages')
 
   const { data: wikiData, isLoading } = useSWR<WikiStatus>(
     '/api/wiki',
@@ -150,6 +161,90 @@ export default function WikiViewer() {
     pagesByCategory[page.category].push(page)
   }
 
+  // Custom ReactMarkdown components
+  const markdownComponents = useMemo(() => ({
+    a: ({ href, children }: any) => {
+      if (href?.startsWith('#wiki-')) {
+        const slug = href.slice(6)
+        const target = pages.find(p => p.name === slug + '.md' || p.name === slug)
+        return (
+          <button
+            type="button"
+            onClick={() => target && loadPage(target)}
+            className="inline-flex items-center gap-0.5 text-primary hover:underline underline-offset-2 font-medium cursor-pointer"
+          >
+            <Link2 className="h-3 w-3 shrink-0" />
+            {children}
+          </button>
+        )
+      }
+      return (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline underline-offset-2 break-all">
+          {children}
+        </a>
+      )
+    },
+    code: ({ inline, children }: any) => {
+      const text = String(children ?? '').trim()
+      if (inline && /^images\/.+\.(png|jpe?g|gif|webp|svg)$/i.test(text)) {
+        const imgUrl = `/${text}`
+        const fname = text.replace('images/', '')
+        return (
+          <Dialog>
+            <DialogTrigger asChild>
+              <span className="group relative inline-block cursor-zoom-in rounded overflow-hidden border border-border hover:border-primary/60 transition-colors align-middle mx-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imgUrl}
+                  alt={fname}
+                  className="h-16 max-w-[120px] object-cover block"
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+                <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                  <ZoomIn className="h-4 w-4 text-white" />
+                </span>
+              </span>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="text-sm font-mono">{fname}</DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 overflow-auto flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgUrl} alt={fname} className="max-w-full max-h-full object-contain" />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )
+      }
+      return inline
+        ? <code className="bg-muted px-1.5 py-0.5 rounded text-[0.82em] font-mono">{children}</code>
+        : <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs font-mono"><code>{children}</code></pre>
+    },
+    blockquote: ({ children }: any) => (
+      <blockquote className="border-l-4 border-primary/50 bg-primary/5 pl-4 pr-2 py-0.5 rounded-r-md my-3 text-muted-foreground italic">
+        {children}
+      </blockquote>
+    ),
+    h2: ({ children }: any) => (
+      <h2 className="text-sm font-semibold mt-5 mb-2 text-foreground border-b border-border pb-1 flex items-center gap-1.5">
+        {children}
+      </h2>
+    ),
+    hr: () => <hr className="my-4 border-border" />,
+    table: ({ children }: any) => (
+      <div className="overflow-x-auto my-3 rounded-md border border-border">
+        <table className="text-sm border-collapse w-full">{children}</table>
+      </div>
+    ),
+    th: ({ children }: any) => (
+      <th className="border-b border-border bg-muted px-3 py-1.5 text-left font-semibold text-xs">{children}</th>
+    ),
+    td: ({ children }: any) => (
+      <td className="border-b border-border/50 px-3 py-1.5 text-sm last:border-b-0">{children}</td>
+    ),
+  }), [pages, loadPage])
+
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
       {/* Sidebar Wiki */}
@@ -192,6 +287,17 @@ export default function WikiViewer() {
             </Button>
             <Button
               size="sm"
+              variant={showLearnPanel ? 'secondary' : 'outline'}
+              className="text-xs h-7"
+              onClick={() => { setShowLearnPanel(v => !v); setLearnResult(null) }}
+              disabled={isIngesting || isLinting || isLearning}
+              title="Insegna un nuovo concetto alla wiki"
+            >
+              <GraduationCap className="h-3 w-3 mr-1" />
+              Insegna
+            </Button>
+            <Button
+              size="sm"
               variant="outline"
               className="text-xs h-7"
               onClick={handleLint}
@@ -214,6 +320,58 @@ export default function WikiViewer() {
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
+
+          {/* Learn Panel */}
+          {showLearnPanel && (
+            <div className="mt-3 pt-3 border-t border-border space-y-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <GraduationCap className="h-3 w-3" />
+                Insegna alla Wiki
+              </p>
+              <input
+                type="text"
+                placeholder="Titolo (opzionale)"
+                value={learnTitle}
+                onChange={e => setLearnTitle(e.target.value)}
+                className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={isLearning}
+              />
+              <Textarea
+                placeholder="Scrivi in linguaggio naturale il concetto, procedura o componente da aggiungere alla wiki..."
+                value={learnText}
+                onChange={e => setLearnText(e.target.value)}
+                className="text-xs min-h-[90px] max-h-48 resize-y"
+                disabled={isLearning}
+              />
+              <Button
+                size="sm"
+                variant="default"
+                className="w-full text-xs h-7"
+                onClick={handleLearn}
+                disabled={isLearning || !learnText.trim()}
+              >
+                {isLearning ? (
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <GraduationCap className="h-3 w-3 mr-1" />
+                )}
+                {isLearning ? 'Elaborazione...' : 'Aggiungi alla Wiki'}
+              </Button>
+              {learnResult && (
+                <div className={`text-[11px] rounded-md px-2 py-1.5 border ${learnResult.success ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'}`}>
+                  {learnResult.success ? (
+                    <>
+                      ✅ {learnResult.log_entry}
+                      <br />
+                      <span className="opacity-70">{learnResult.pages_created} create, {learnResult.pages_updated} aggiornate</span>
+                    </>
+                  ) : (
+                    <>❌ {learnResult.error}</>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Page List */}
@@ -263,7 +421,44 @@ export default function WikiViewer() {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-6">
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* View toggle */}
+        <div className="shrink-0 flex items-center gap-1 px-4 pt-3 pb-1 border-b border-border">
+          <button
+            type="button"
+            onClick={() => setViewMode('pages')}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-colors ${
+              viewMode === 'pages'
+                ? 'bg-primary/10 text-primary font-medium'
+                : 'text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Pagine
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('graph')}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-colors ${
+              viewMode === 'graph'
+                ? 'bg-primary/10 text-primary font-medium'
+                : 'text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            Grafo
+          </button>
+        </div>
+
+        {/* Graph view */}
+        {viewMode === 'graph' && (
+          <div className="flex-1 min-h-0">
+            <WikiGraph pages={pages} onSelectPage={(page) => { setViewMode('pages'); loadPage(page) }} />
+          </div>
+        )}
+
+        {/* Pages view */}
+        {viewMode === 'pages' && <div className="flex-1 overflow-y-auto min-h-0 p-6">
         {ingestResult && (
           <div className="mb-6 p-4 rounded-lg border bg-card">
             <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
@@ -370,15 +565,32 @@ export default function WikiViewer() {
               )
             })()}
 
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{pageContent}</ReactMarkdown>
+            <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:my-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {processWikiLinks(pageContent, pages)}
+              </ReactMarkdown>
             </div>
-            <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
-              <p>Ultima modifica: {new Date(selectedPage.modified).toLocaleString('it-IT')}</p>
+            <div className="mt-6 pt-4 border-t">
+              <p className="text-xs text-muted-foreground mb-2">
+                Ultima modifica: {new Date(selectedPage.modified).toLocaleString('it-IT')}
+              </p>
               {selectedPage.links.length > 0 && (
-                <p className="mt-1">
-                  Link: {selectedPage.links.map(l => `[[${l}]]`).join(', ')}
-                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedPage.links.map(slug => {
+                    const target = pages.find(p => p.name === slug + '.md' || p.name === slug)
+                    return (
+                      <button
+                        key={slug}
+                        type="button"
+                        onClick={() => target && loadPage(target)}
+                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-border bg-muted hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors"
+                      >
+                        <Link2 className="h-2.5 w-2.5" />
+                        {target?.title ?? slug}
+                      </button>
+                    )
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -397,6 +609,7 @@ export default function WikiViewer() {
             </div>
           </div>
         ) : null}
+        </div>}
       </div>
     </div>
   )

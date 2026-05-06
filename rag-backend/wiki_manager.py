@@ -125,6 +125,55 @@ def list_wiki_pages() -> list:
     return sorted(pages, key=lambda x: x["modified"], reverse=True)
 
 
+def get_wiki_graph() -> dict:
+    """Restituisce nodi e archi per la visualizzazione a grafo della wiki."""
+    pages = list_wiki_pages()
+
+    nodes = []
+    edges = []
+    seen_edges: set = set()
+    node_ids: set = set()
+
+    for page in pages:
+        slug = page['name'].replace('.md', '')
+        node_ids.add(slug)
+        nodes.append({
+            'id': slug,
+            'label': page['title'],
+            'category': page['category'],
+            'links_count': page.get('links_count', 0),
+        })
+
+    def _add_edge(src: str, dst: str):
+        if dst not in node_ids:
+            return
+        key = f"{src}→{dst}"
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edges.append({'id': key, 'source': src, 'target': dst})
+
+    for page in pages:
+        source_slug = page['name'].replace('.md', '')
+        wiki_dir = get_wiki_dir()
+        safe_cat = os.path.basename(page['category'])
+        safe_name = os.path.basename(page['name'])
+        content = _read_file(os.path.join(wiki_dir, safe_cat, safe_name))
+
+        # Archi da [[wikilink]]
+        for target_slug in re.findall(r'\[\[([^\]]+)\]\]', content):
+            _add_edge(source_slug, target_slug)
+
+        # Archi da riferimenti immagine: `images/<nomefile>`
+        # I file .md delle immagini usano tutti dash; i riferimenti nei testi
+        # possono usare underscore (es. _p10_img1). Normalizziamo _ → - per il lookup.
+        for img_ref in re.findall(r'`images/([^`]+)`', content):
+            img_slug = re.sub(r'\.[^.]+$', '', img_ref)   # rimuovi estensione
+            img_slug = img_slug.replace('_', '-')           # normalizza _ → -
+            _add_edge(source_slug, img_slug)
+
+    return {'nodes': nodes, 'edges': edges}
+
+
 def get_wiki_page(category: str, filename: str) -> Optional[dict]:
     """Legge una singola pagina wiki."""
     wiki_dir = get_wiki_dir()
