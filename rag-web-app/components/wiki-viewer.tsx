@@ -163,6 +163,8 @@ export default function WikiViewer() {
 
   // Custom ReactMarkdown components
   const markdownComponents = useMemo(() => ({
+    // Render p as div to avoid invalid nesting when code blocks appear inside paragraphs
+    p: ({ children }: any) => <div className="my-2">{children}</div>,
     a: ({ href, children }: any) => {
       if (href?.startsWith('#wiki-')) {
         const slug = href.slice(6)
@@ -184,42 +186,70 @@ export default function WikiViewer() {
         </a>
       )
     },
-    code: ({ inline, children }: any) => {
-      const text = String(children ?? '').trim()
-      if (inline && /^images\/.+\.(png|jpe?g|gif|webp|svg)$/i.test(text)) {
+    // In react-markdown v10 the `inline` prop was removed from `code`.
+    // Block code is wrapped in a `pre` by react-markdown; we style that here.
+    pre: ({ children }: any) => (
+      <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs font-mono my-2">{children}</pre>
+    ),
+    code: ({ className, children }: any) => {
+      const raw = String(children ?? '')
+      const text = raw.trim()
+      // Inline code: no language className and no newlines
+      const isInline = !className && !raw.includes('\n')
+      if (isInline && /^images\/.+\.(png|jpe?g|gif|webp|svg)$/i.test(text)) {
         const imgUrl = `/${text}`
         const fname = text.replace('images/', '')
+        // Calcola lo slug della pagina wiki immagine (senza estensione, _ → -)
+        const imgSlug = fname.replace(/\.[^.]+$/, '').replace(/_/g, '-')
+        const imgWikiPage = pages.find(p =>
+          p.category === 'images' && (p.name === imgSlug + '.md' || p.name === imgSlug)
+        )
+        // Se siamo già sulla pagina di questa immagine, non mostrare miniatura ridondante
+        if (imgWikiPage && imgWikiPage.name === selectedPage?.name) {
+          return <code className="bg-muted px-1.5 py-0.5 rounded text-[0.82em] font-mono">{children}</code>
+        }
         return (
-          <Dialog>
-            <DialogTrigger asChild>
-              <span className="group relative inline-block cursor-zoom-in rounded overflow-hidden border border-border hover:border-primary/60 transition-colors align-middle mx-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imgUrl}
-                  alt={fname}
-                  className="h-16 max-w-[120px] object-cover block"
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
-                <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                  <ZoomIn className="h-4 w-4 text-white" />
+          <span className="inline-flex items-center gap-1.5 align-middle mx-1 my-0.5">
+            <Dialog>
+              <DialogTrigger asChild>
+                <span className="group relative inline-block cursor-zoom-in rounded overflow-hidden border border-border hover:border-primary/60 transition-colors">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imgUrl}
+                    alt={fname}
+                    className="h-16 max-w-[120px] object-cover block"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                    <ZoomIn className="h-4 w-4 text-white" />
+                  </span>
                 </span>
-              </span>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-              <DialogHeader>
-                <DialogTitle className="text-sm font-mono">{fname}</DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 overflow-auto flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imgUrl} alt={fname} className="max-w-full max-h-full object-contain" />
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="text-sm font-mono">{fname}</DialogTitle>
+                </DialogHeader>
+                <div className="flex-1 overflow-auto flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imgUrl} alt={fname} className="max-w-full max-h-full object-contain" />
+                </div>
+              </DialogContent>
+            </Dialog>
+            {imgWikiPage && imgWikiPage.name !== selectedPage?.name && (
+              <button
+                type="button"
+                onClick={() => loadPage(imgWikiPage)}
+                className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline underline-offset-2 font-medium cursor-pointer"
+                title={`Apri pagina wiki: ${imgWikiPage.title}`}
+              >
+                <Link2 className="h-3 w-3 shrink-0" />
+                {imgWikiPage.title}
+              </button>
+            )}
+          </span>
         )
       }
-      return inline
-        ? <code className="bg-muted px-1.5 py-0.5 rounded text-[0.82em] font-mono">{children}</code>
-        : <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs font-mono"><code>{children}</code></pre>
+      return <code className={isInline ? 'bg-muted px-1.5 py-0.5 rounded text-[0.82em] font-mono' : className}>{children}</code>
     },
     blockquote: ({ children }: any) => (
       <blockquote className="border-l-4 border-primary/50 bg-primary/5 pl-4 pr-2 py-0.5 rounded-r-md my-3 text-muted-foreground italic">
@@ -243,7 +273,7 @@ export default function WikiViewer() {
     td: ({ children }: any) => (
       <td className="border-b border-border/50 px-3 py-1.5 text-sm last:border-b-0">{children}</td>
     ),
-  }), [pages, loadPage])
+  }), [pages, loadPage, selectedPage])
 
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
