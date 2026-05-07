@@ -470,7 +470,7 @@ async def wiki_query_endpoint(request: WikiQueryRequest) -> dict:
 
     answer, pages_used, usage, wiki_context = wq(
         query=request.query,
-        session_history=session_history,
+        session_history=None,
         model_config=model_config,
     )
 
