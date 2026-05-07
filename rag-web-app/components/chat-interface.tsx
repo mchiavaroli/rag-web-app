@@ -37,10 +37,12 @@ function ChatInterface({
   wikiMode = false,
   wikiMessages = [],
   setWikiMessages,
+  onWikiSourceClick,
 }: {
   wikiMode?: boolean
   wikiMessages?: DisplayMessage[]
   setWikiMessages?: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
+  onWikiSourceClick?: (path: string) => void
 }) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -272,7 +274,7 @@ function ChatInterface({
                           {deduplicateSources(message.sources)
                             .filter(s => s.type === 'wiki')
                             .map((source, idx) => (
-                              <SourceViewer key={`wiki-${idx}`} source={source} />
+                              <SourceViewer key={`wiki-${idx}`} source={source} onWikiClick={onWikiSourceClick} />
                             ))}
                         </div>
                       )}

@@ -63,7 +63,7 @@ class DocumentIntelligenceExtractor:
         print(f"📄 Analisi PDF con Document Intelligence: {pdf_path}")
 
         # Tronca il PDF alle prime MAX_PAGES pagine prima di inviare a DI
-        MAX_PAGES = 30
+        MAX_PAGES = 1000
         import fitz as _fitz
         _src = _fitz.open(pdf_path)
         _total = _src.page_count

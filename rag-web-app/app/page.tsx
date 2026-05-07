@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { MessageSquare, BookOpen } from 'lucide-react'
 import { DocumentSidebar } from '@/components/document-sidebar'
 import ChatInterface from '@/components/chat-interface'
@@ -12,6 +12,12 @@ type Mode = 'wiki' | 'wiki-chat'
 export default function Home() {
   const [mode, setMode] = useState<Mode>('wiki-chat')
   const [wikiMessages, setWikiMessages] = useState<ChatMessage[]>([])
+  const [pendingWikiPage, setPendingWikiPage] = useState<string | null>(null)
+
+  const handleOpenWikiSource = useCallback((path: string) => {
+    setMode('wiki')
+    setPendingWikiPage(path)
+  }, [])
 
   return (
     <main className="h-screen flex overflow-hidden">
@@ -45,10 +51,10 @@ export default function Home() {
 
         {/* Mantieni i componenti montati con hidden per preservare lo stato al cambio tab */}
         <div className={mode === 'wiki-chat' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
-          <ChatInterface wikiMode wikiMessages={wikiMessages} setWikiMessages={setWikiMessages} />
+          <ChatInterface wikiMode wikiMessages={wikiMessages} setWikiMessages={setWikiMessages} onWikiSourceClick={handleOpenWikiSource} />
         </div>
         <div className={mode === 'wiki' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
-          <WikiViewer />
+          <WikiViewer openPagePath={pendingWikiPage} onPageOpened={() => setPendingWikiPage(null)} />
         </div>
       </div>
     </main>

@@ -842,7 +842,7 @@ def lint_wiki(model_config: dict = None) -> dict:
     config = model_config or MODEL_PROMPT
     _ensure_wiki_dirs()
 
-    all_wiki_content = _load_all_wiki_content(max_pages=50)
+    all_wiki_content = _load_all_wiki_content(max_pages=50000)
     schema = _read_file(get_wiki_schema_path())
 
     if not all_wiki_content.strip():

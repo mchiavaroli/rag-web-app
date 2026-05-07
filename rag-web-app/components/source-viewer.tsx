@@ -14,6 +14,7 @@ import type { Source } from '@/lib/types'
 
 interface SourceViewerProps {
   source: Source
+  onWikiClick?: (path: string) => void
 }
 
 /** Mostra un'immagine estratta come thumbnail cliccabile con lightbox */
@@ -153,8 +154,8 @@ function PdfSource({ source }: { source: Source }) {
   )
 }
 
-/** Mostra una fonte wiki come badge con categoria e titolo */
-function WikiSource({ source }: { source: Source }) {
+/** Mostra una fonte wiki come badge cliccabile con categoria e titolo */
+function WikiSource({ source, onWikiClick }: { source: Source; onWikiClick?: (path: string) => void }) {
   // path es. "sources/advanced-work-instructions-1.md"
   const parts = source.path.split('/')
   const category = parts.length >= 2 ? parts[parts.length - 2] : ''
@@ -169,6 +170,23 @@ function WikiSource({ source }: { source: Source }) {
     components: 'Componente',
   }
 
+  if (onWikiClick) {
+    return (
+      <button
+        type="button"
+        onClick={() => onWikiClick(source.path)}
+        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-medium capitalize hover:bg-primary/20 hover:border-primary/40 transition-colors cursor-pointer"
+        title="Apri nella wiki"
+      >
+        <FileText className="h-3 w-3 shrink-0" />
+        {categoryLabel[category] && (
+          <span className="text-primary/60 font-normal">{categoryLabel[category]}:</span>
+        )}
+        {label}
+      </button>
+    )
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-medium capitalize">
       <FileText className="h-3 w-3 shrink-0" />
@@ -180,8 +198,8 @@ function WikiSource({ source }: { source: Source }) {
   )
 }
 
-export function SourceViewer({ source }: SourceViewerProps) {
+export function SourceViewer({ source, onWikiClick }: SourceViewerProps) {
   if (source.type === 'image') return <ImageSource source={source} />
-  if (source.type === 'wiki') return <WikiSource source={source} />
+  if (source.type === 'wiki') return <WikiSource source={source} onWikiClick={onWikiClick} />
   return <PdfSource source={source} />
 }

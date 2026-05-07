@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import useSWR, { mutate } from 'swr'
 import {
   BookOpen, FileText, Upload, Search, AlertTriangle,
@@ -41,7 +41,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   images: 'Immagini',
 }
 
-export default function WikiViewer() {
+export default function WikiViewer({ openPagePath, onPageOpened }: {
+  openPagePath?: string | null
+  onPageOpened?: () => void
+}) {
   const [selectedPage, setSelectedPage] = useState<WikiPage | null>(null)
   const [pageContent, setPageContent] = useState<string>('')
   const [isIngesting, setIsIngesting] = useState(false)
@@ -153,6 +156,20 @@ export default function WikiViewer() {
   const pages = wikiData?.pages || []
   const categories = wikiData?.categories || { sources: 0, concepts: 0, procedures: 0, components: 0, images: 0 }
   const totalPages = wikiData?.total_pages || 0
+
+  // Naviga automaticamente a una pagina richiesta dall'esterno (es. click su fonte nella chat)
+  useEffect(() => {
+    if (!openPagePath || pages.length === 0) return
+    // Il path può essere "sources/foo.md" o "wiki/sources/foo.md"
+    const parts = openPagePath.split('/')
+    const filename = parts[parts.length - 1]
+    const category = parts[parts.length - 2]
+    const page = pages.find(p => p.name === filename && p.category === category)
+    if (page) {
+      loadPage(page)
+      onPageOpened?.()
+    }
+  }, [openPagePath, pages, loadPage, onPageOpened])
 
   // Raggruppa pagine per categoria
   const pagesByCategory: Record<string, WikiPage[]> = {}
@@ -606,7 +623,7 @@ export default function WikiViewer() {
               </p>
               {selectedPage.links.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {selectedPage.links.map(slug => {
+                  {[...new Set(selectedPage.links)].map(slug => {
                     const target = pages.find(p => p.name === slug + '.md' || p.name === slug)
                     return (
                       <button

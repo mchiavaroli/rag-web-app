@@ -1,322 +1,311 @@
-# 🚀 RAG Multimodale + Contextual Retrieval
+# RAG Multimodale + LLM Wiki
 
-## 🎯 Cos'è
+## Cos'è
 
-Sistema RAG avanzato che estrae e comprende informazioni da **testo** e **immagini** dei PDF.
+Sistema che combina un pipeline **RAG multimodale** (testo + immagini da PDF) con un layer di **LLM Wiki**: una knowledge base strutturata a pagine Markdown generata e aggiornata automaticamente da un LLM a partire dai documenti indicizzati.
 
-**Caratteristiche principali:**
-- 📄 Contextual Retrieval per testo (Anthropic 2024)
-- 🖼️ Estrazione automatica immagini (bitmap + grafici vettoriali)
-- 🤖 Analisi immagini con Claude Opus 4-6 / Azure AI Vision
-- 🎯 Selezione intelligente delle immagini rilevanti
-- 📊 Supporto tabelle con Azure Document Intelligence
+L'LLM Wiki non è un semplice indice vettoriale: è una raccolta di pagine Markdown scritte dal modello, interconnesse tramite wikilink (`[[nome-pagina]]`), che il modello legge come contesto pre-sintetizzato prima di rispondere alle domande dell'utente.
 
 ---
 
-## 🔄 Pipeline di Build - Step-by-Step
+## Funzionalitè
 
-### 📘 1. Build Standard (`build_index.py`)
+### Pipeline RAG (indicizzazione)
 
-Usa **PyPDF + OpenCV + Claude Opus** per l'indicizzazione.
+- Estrazione testo da PDF, DOCX, TXT, XLSX tramite Azure Document Intelligence (layout + tabelle) o PyPDF
+- Estrazione immagini bitmap e vettoriali (OpenCV layout detection)
+- Analisi visiva di ogni immagine con un modello LLM multimodale
+- Chunking + Contextual Retrieval: ogni chunk riceve un contesto generato dal LLM
+- Embedding con Sentence Transformers (`all-MiniLM-L6-v2`) e indice FAISS locale
+- Supporto opzionale per Azure AI Search come vector store cloud
+
+### LLM Wiki
+
+| Operazione | Descrizione |
+|---|---|
+| **Ingest documento** | Il LLM legge il documento indicizzato e genera/aggiorna pagine wiki strutturate |
+| **Ingest immagini** | Ogni immagine viene analizzata con LLM vision e ottiene una pagina wiki in `images/` |
+| **Learn** | L'utente inserisce testo libero; il LLM lo integra nella wiki come nuove pagine o aggiornamenti |
+| **Lint** | Analisi stato di salute della wiki con estrazioni di suggerimenti migliorativi della stessa |
+| **Query** | Il LLM legge le pagine wiki pre-sintetizzate piè rilevanti per rispondere alla domanda |
+| **Graph** | Visualizzazione a grafo degli inter-link tra pagine wiki |
+
+### Web App
+
+Frontend Next.js con:
+
+- Chat RAG con citazione delle fonti (chunk testuali + immagini)
+- Sidebar documenti con upload e build indice
+- Viewer wiki con navigazione per categoria e apertura pagine
+- Grafo interattivo dei wikilink
+- Log dell'indicizzazione in tempo reale
+- Selezione del modello LLM per ogni conversazione
+
+---
+
+## Struttura della Wiki
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 1: Caricamento Documenti                                       │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Legge file da cartella ./docs                                     │
-│ • Supporta: PDF, TXT, MD, DOCX, XLSX, XLS                          │
-│ • PyPDF per estrazione testo da PDF                                 │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 2: Chunking Testo                                              │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Divide testo in chunk (default: 800 caratteri)                    │
-│ • Overlap tra chunk (default: 200 caratteri)                        │
-│ • Split su fine frase (. ? !)                                       │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 3: Contextual Retrieval (Testo)                                │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Claude Opus genera contesto per ogni chunk                        │
-│ • Batch processing (default: 10 chunk per chiamata)                 │
-│ • Output: "CONTEXT: ... CONTENT: ..."                              │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 4: Estrazione Immagini da PDF                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│ • PyMuPDF (fitz): estrae immagini bitmap embedded                   │
-│ • OpenCV: layout detection per figure vettoriali                    │
-│   - Render pagina a 300 DPI                                         │
-│   - Canny edge detection + morphology                               │
-│   - Trova contorni e croppa regioni                                 │
-│ • Filtra per dimensione minima (default: 100px)                     │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 5: Analisi Immagini con Claude Opus                            │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Ogni immagine → Claude Opus (Vision)                              │
-│ • Invia: immagine base64 + testo della pagina come contesto         │
-│ • Genera descrizione: tipo contenuto, componenti, valori,           │
-│   connessioni, testo presente, scopo tecnico                        │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 6: Contestualizzazione Immagini                                │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Aggiunge contesto posizionale alle descrizioni                    │
-│ • "Immagine dalla pagina X del documento Y, salvata come Z"         │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 7: Calcolo Embeddings                                          │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Sentence Transformers (all-MiniLM-L6-v2)                          │
-│ • Embedding su text_for_embedding (testo contestualizzato)          │
-│ • Normalizzazione L2                                                │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 8: Costruzione Index FAISS                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│ • IndexFlatIP (Inner Product per cosine similarity)                 │
-│ • Salva in: output/docs_index_multimodal_contextual.faiss           │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 9: Salvataggio Metadata                                        │
-├─────────────────────────────────────────────────────────────────────┤
-│ • output/metadata_multimodal_contextual.json                        │
-│ • output/chunks_multimodal_contextual.jsonl                         │
-└─────────────────────────────────────────────────────────────────────┘
+wiki/
++-- index.md          # Indice principale con link a tutte le pagine
++-- log.md            # Log cronologico di tutte le operazioni
++-- schema.md         # Regole di formato e comportamento per il LLM
++-- sources/          # Sommario di ogni documento ingerito (1 pagina/doc)
++-- concepts/         # Concetti tecnici (coppie di serraggio, materiali, standard...)
++-- procedures/       # Procedure operative step-by-step
++-- components/       # Componenti e Part Numbers
++-- images/           # Pagine generate per ogni immagine analizzata
+```
+
+Ogni pagina segue questo template:
+
+```markdown
+# Titolo
+
+> Breve descrizione in una riga.
+
+## Dettagli
+Contenuto conciso (max 150-200 parole, elenchi puntati preferiti).
+
+## Riferimenti Visivi
+`images/nomefile.png`
+
+## Collegamenti
+- [[pagina-correlata]]
+
+## Fonti
+- Documento: nomefile.pdf, Pagina: N
 ```
 
 ---
 
-### 📗 2. Build con Document Intelligence (`build_index_document_intelligence.py`)
+## Flusso delle Operazioni
 
-Usa **Azure AI Document Intelligence** per estrazione avanzata del layout.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 1: Inizializzazione Document Intelligence                      │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Configura client Azure Document Intelligence                      │
-│ • Modello: prebuilt-layout (estrazione struttura documenti)         │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 2: Caricamento con Document Intelligence                       │
-├─────────────────────────────────────────────────────────────────────┤
-│ • PDF → Document Intelligence API                                   │
-│ • Estrae simultaneamente:                                           │
-│   - Chunk testuali con ruolo (title, sectionHeading, text)          │
-│   - Tabelle con struttura (righe, colonne, celle)                   │
-│   - Immagini con bounding box e caption                             │
-│ • Fallback a PyPDF se DI non disponibile                            │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 3: Processing Chunk Strutturati                                │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Usa chunk già estratti da Document Intelligence                   │
-│ • Preserva ruoli: [TITLE], [SECTIONHEADING], [TEXT]                 │
-│ • Mantiene riferimento a pagina di origine                          │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 4: Contextual Retrieval (Testo)                                │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Identico a build standard                                         │
-│ • Claude Opus contestualizza ogni chunk                             │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 5: Processing Tabelle (ESCLUSIVO DI)                           │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Tabelle estratte come chunk speciali                              │
-│ • Include: [TABELLA - Pagina X] + contenuto formattato              │
-│ • Metadati: table_id, row_count, column_count                       │
-│ • Contestualizzazione LLM della tabella                             │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 6: Gestione Immagini                                           │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Se DI: usa immagini già estratte con caption                      │
-│ • Se fallback: estrazione standard PyMuPDF + OpenCV                 │
-│ • Analisi con Claude Opus (+ caption DI come contesto extra)        │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 7-9: Embeddings, FAISS, Salvataggio                            │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Identici a build standard                                         │
-│ • Chunk output includono tipo: text, image, table                   │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### 📙 3. Build con Azure Vision (`build_index_vision.py`)
-
-Usa **Azure AI Vision** (Image Analysis 4.0) invece di Claude per le immagini.
+### 1. Indicizzazione documento
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 1-4: Identici a Build Standard                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Caricamento documenti                                             │
-│ • Chunking testo                                                    │
-│ • Contextual Retrieval testo (Claude)                               │
-│ • Estrazione immagini (PyMuPDF + OpenCV)                            │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 5: Analisi Immagini con Azure AI Vision                        │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Ogni immagine → Azure Vision API (Image Analysis 4.0)             │
-│ • Features estratte:                                                │
-│   📷 CAPTION: descrizione principale (es: "a diagram showing...")   │
-│   📍 DENSE CAPTIONS: descrizioni dettagliate di regioni             │
-│   🏷️ TAGS: etichette semantiche (diagram, text, table, etc.)        │
-│   📝 READ (OCR): estrae tutto il testo visibile                     │
-│ • Combina risultati in descrizione strutturata                      │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 6: Correlazione con Contesto Pagina                            │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Estrae keywords dal testo della pagina                            │
-│ • Cerca match tra keywords pagina e tags Azure Vision               │
-│ • Aggiunge sezione "Correlazioni con la pagina"                     │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 7: Contestualizzazione Immagini                                │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Aggiunge: "Analizzata con Azure AI Vision"                        │
-│ • Contesto posizionale (pagina, documento, path)                    │
-└─────────────────────────────────────────────────────────────────────┘
-                                    ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│ STEP 8-10: Embeddings, FAISS, Salvataggio                           │
-├─────────────────────────────────────────────────────────────────────┤
-│ • Identici a build standard                                         │
-└─────────────────────────────────────────────────────────────────────┘
+PDF / DOCX / TXT
+       è
+       ?
+Azure Document Intelligence  --------------------------+
+(estrazione testo + tabelle)                           è
+       è                                               è
+       ?                                               ?
+Chunking (800 char, overlap 200)         Estrazione immagini
+       è                                  (bitmap + vettoriali)
+       ?                                               è
+Contextual Retrieval                                   ?
+(LLM genera contesto per chunk)         Analisi vision LLM
+       è                                  (descrizione tecnica)
+       ?                                               è
+Sentence Transformers embedding  ?---------------------+
+       è
+       ?
+FAISS index  +  metadata.json  +  chunks.jsonl
+```
+
+### 2. Ingest Wiki da documento
+
+```
+Documento indicizzato
+       è
+       ?
+wiki_manager.ingest_document()
+       è
+       +- Carica wiki esistente come contesto
+       +- Invia documento + wiki al LLM
+       +- LLM risponde con JSON: {pages, index_update, log_entry}
+       è
+       +- Scrive pagine in wiki/sources/, concepts/, procedures/, components/
+       +- Aggiorna wiki/index.md
+       +- Appende a wiki/log.md
+       è
+       ? (se ci sono immagini)
+wiki_manager.ingest_images_to_wiki()
+       è
+       +- Per ogni immagine: call_llm_with_image() ? descrizione tecnica
+       +- Scrive pagina in wiki/images/{filename}.md
+```
+
+### 3. Query con contesto Wiki
+
+```
+Domanda utente
+       è
+       ?
+_find_relevant_pages(query)    ? keyword scoring su tutte le pagine wiki
+       è
+       ?
+Top-K pagine wiki  +  FAISS retrieval (chunk testuali + immagini)
+       è
+       ?
+LLM genera risposta
+       è
+       ?
+Risposta  +  fonti PDF  +  immagini correlate
 ```
 
 ---
 
-## 📊 Confronto Build Types
+## Configurazione (config.py)
 
-| Feature | Standard | Document Intelligence | Azure Vision |
-|---------|----------|----------------------|--------------|
-| **Estrazione Testo** | PyPDF | Azure DI (layout avanzato) | PyPDF |
-| **Analisi Immagini** | Claude Opus | Claude Opus | Azure Vision |
-| **Supporto Tabelle** | ❌ No | ✅ Sì (strutturate) | ❌ No |
-| **OCR Immagini** | Claude | Claude | Azure Vision Read |
-| **Caption Automatici** | ❌ No | ✅ Sì (DI) | ✅ Sì (Vision) |
-| **Costo Relativo** | 💰💰 | 💰💰💰 | 💰 |
-| **Qualità Descrizioni** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-
----
-
-## 🔍 Ricerca (Query)
-
-Quando fai una domanda (`rag_query.py`):
-
-1. **Embedding query** → Sentence Transformers
-2. **Ricerca FAISS** → trova top-k chunk (testo + immagini)
-3. **Re-ranking immagini** → filtra per rilevanza:
-   - Score ≥ 0.60 + keyword overlap ≥ 20%
-   - Score ≥ 0.70 senza keyword
-   - Keyword overlap ≥ 40%
-4. **Build prompt** → combina 3 testi + max 5 immagini
-5. **LLM Response** → Claude genera risposta
-6. **Selezione immagini output** → mostra solo quelle citate o ad alto score
-
----
-
-## 🚀 Utilizzo
-
-### Build Index
+Il file `config.py` contiene credenziali sensibili e **non viene versionato**. Copiare `config_example.py` come `config.py` e compilare i valori:
 
 ```bash
-# Standard (Claude per tutto)
-python build_index.py --docs ./docs
-
-# Con Document Intelligence (estrazione avanzata)
-python build_index_document_intelligence.py --docs ./docs --use-document-intelligence
-
-# Con Azure Vision (alternativa più economica per immagini)
-python build_index_vision.py --docs ./docs
+cp config_example.py config.py
 ```
 
-### Query Interattiva
+### Parametri di processing
+
+```python
+CHUNK_SIZE = 800          # Dimensione chunk di testo (caratteri)
+CHUNK_OVERLAP = 200       # Overlap tra chunk consecutivi
+BATCH_SIZE = 25           # Chunk per chiamata LLM nella contestualizzazione
+LLM_CONCURRENCY = 4       # Chiamate LLM in parallelo
+
+MIN_IMAGE_SIZE = 100      # Dimensione minima immagini estratte (pixel)
+USE_LAYOUT_DETECTION = True  # OpenCV per figure vettoriali
+
+TOP_K_TEXT = 10           # Chunk testuali da recuperare per query
+TOP_K_IMAGES = 3          # Immagini massime per query
+```
+
+### Modelli LLM (MODEL_PROVIDERS)
+
+Dizionario con tutti i modelli disponibili. Ogni entry ha questi campi:
+
+```python
+"nome-modello": {
+    'provider': 'openai' | 'anthropic' | 'mistral' | 'mistral-ocr',
+    'deployment_name': 'nome-deployment-azure',
+    'endpoint': '<<endpoint>>',
+    'api_key': '<chiave>',
+    'max_tokens': 4096,              # per Anthropic/Mistral
+    'max_completion_tokens': 4096,   # per OpenAI
+    'temperature': 0,
+    'api_version': '2024-12-01-preview',  # solo per OpenAI
+    'name': 'Nome visualizzato nella UI',
+}
+```
+
+I parametri `DEFAULT_MODEL_NAME` e `DEFAULT_IMAGE_MODEL_NAME` selezionano rispettivamente il modello usato per la chat/ingest e per l'analisi visiva delle immagini.
+
+### Azure Document Intelligence
+
+```python
+DOCUMENT_INTELLIGENCE = {
+    'endpoint': 'https://<risorsa>.cognitiveservices.azure.com/',
+    'api_key': '<chiave>',
+    'api_version': '2024-02-29-preview',
+    'model_id': 'prebuilt-layout'
+}
+```
+
+### Azure AI Search (opzionale è vector store cloud)
+
+```python
+AZURE_SEARCH = {
+    'endpoint': 'https://<risorsa>.search.windows.net',
+    'api_key': '<chiave>',
+    'index_name': 'rag-multimodal-index',
+    'embedding_dimensions': 384,
+}
+```
+
+### Azure AI Vision (opzionale è analisi immagini alternativa)
+
+```python
+AZURE_VISION = {
+    'endpoint': 'https://<risorsa>.cognitiveservices.azure.com/',
+    'api_key': '<chiave>',
+    'api_version': '2024-02-01',
+    'features': ['caption', 'denseCaptions', 'tags', 'read'],
+    'language': 'it',
+    'gender_neutral_caption': True
+}
+```
+
+### Wiki
+
+```python
+WIKI_DIR = "wiki"
+WIKI_MAX_CONTEXT_PAGES = 15    # Max pagine wiki nel contesto LLM per query
+WIKI_INGEST_MAX_TOKENS = 8192  # Max caratteri del documento inviati in ingest (x4 per token)
+```
+
+---
+
+## Avviare Backend e Frontend
+
+### Prerequisiti
+
+- Python 3.10+
+- Node.js 18+ con pnpm
+
+### Backend (FastAPI)
 
 ```bash
-python rag_query.py
+cd rag-backend
+
+# Prima installazione
+pip install -r requirements.txt
+
+# Copia e compila la configurazione
+cp config_example.py config.py
+# ... edita config.py con le tue credenziali ...
+
+# Avvia il server
+py api_server.py
 ```
 
----
+Il backend si avvia su `http://localhost:8000`.
 
-## 📁 File Generati
+Endpoint principali:
 
-Tutti i file generati vengono salvati nella cartella `output/`:
+| Metodo | Path | Descrizione |
+|--------|------|-------------|
+| `GET` | `/api/wiki/status` | Stato della wiki (totale pagine per categoria) |
+| `GET` | `/api/wiki/pages` | Lista tutte le pagine wiki |
+| `GET` | `/api/wiki/graph` | Nodi e archi per la visualizzazione a grafo |
+| `GET` | `/api/wiki/pages/{category}/{filename}` | Contenuto di una singola pagina |
+| `POST` | `/api/wiki/ingest` | Avvia ingest wiki dal documento giè indicizzato |
+| `POST` | `/api/wiki/learn` | Integra testo libero nella wiki |
+| `POST` | `/api/query` | Esegue una query RAG (con contesto wiki) |
+| `POST` | `/api/documents/upload` | Carica un documento |
+| `POST` | `/api/index/build` | Avvia build dell'indice FAISS |
 
-- `output/docs_index_multimodal_contextual.faiss` - Vector store con embeddings
-- `output/chunks_multimodal_contextual.jsonl` - Tutti i chunk (testo + immagini) con contesto
-- `output/metadata_multimodal_contextual.json` - Metadata per retrieval
-- `output/extracted_images/*.png` - Immagini estratte dai PDF
+### Frontend (Next.js)
 
----
+```bash
+cd rag-web-app
 
-## ⚙️ Configurazione
+# Prima installazione
+pnpm install
 
-Tutte le configurazioni sono centralizzate in `config.py`:
-
-### Parametri Configurabili
-
-| Parametro | Default | Descrizione |
-|-----------|---------|-------------|
-| `CHUNK_SIZE` | 800 | Dimensione chunk testo |
-| `CHUNK_OVERLAP` | 200 | Overlap tra chunk |
-| `BATCH_SIZE` | 10 | Chunk per chiamata LLM |
-| `MIN_IMAGE_SIZE` | 100 | Filtra immagini piccole (px) |
-| `TOP_K_TEXT` | 3 | Chunk testo da recuperare |
-| `TOP_K_IMAGES` | 5 | Max immagini da recuperare |
-| `OUTPUT_DIR` | "output" | Cartella file generati |
-
-### Domain Prompt Personalizzato
-
-Crea `domain_prompt_custom.txt` per ottimizzare il contesto nel tuo dominio:
-
-```txt
-You are an expert in [YOUR DOMAIN].
-Key concepts: [technical terms, standards, procedures]
-
-For each chunk, provide 1-2 sentence context focusing on:
-- Technical category (hardware/software/procedure)
-- Relationships to other sections
-- Key identifiers (model numbers, versions)
+# Avvia in modalitè sviluppo
+pnpm dev
 ```
 
+Il frontend si avvia su `http://localhost:3000` e si connette al backend su `http://localhost:8000`.
+
 ---
 
-## 🔧 Architettura Tecnica
+## Struttura File Backend
 
-**Estrazione Immagini:**
-- Bitmap embedded (foto, scansioni)
-- Layout detection con OpenCV (disegni tecnici vettoriali, schemi, diagrammi)
-
-**Analisi:**
-- Claude Opus 4-6 analizza ogni immagine e genera descrizione dettagliata
-- Azure Vision come alternativa economica
-
-**Storage:**
-- Index FAISS unificato con embeddings di testo + descrizioni immagini
-- Sentence Transformers (all-MiniLM-L6-v2) per embeddings
+```
+rag-backend/
++-- api_server.py                         # FastAPI: tutti gli endpoint HTTP
++-- wiki_manager.py                       # LLM Wiki: ingest, query, learn, graph
++-- llm_client.py                         # Client unificato (OpenAI/Anthropic/Mistral)
++-- build_index.py                        # Pipeline RAG con PyPDF + OpenCV
++-- build_index_document_intelligence.py  # Pipeline RAG con Azure Document Intelligence
++-- document_intelligence_extractor.py    # Estrazione testo/tabelle con Azure DI
++-- azure_search_client.py                # Client per Azure AI Search
++-- rag_logger.py                         # Logger per log indicizzazione
++-- config.py                             # Configurazione (NON versionato)
++-- config_example.py                     # Template configurazione senza credenziali
++-- requirements.txt
++-- docs/                                 # Documenti PDF/DOCX da indicizzare
++-- output/                               # Indice FAISS, metadata, chunk, immagini
++-- wiki/                                 # Knowledge base wiki (pagine Markdown)
+```

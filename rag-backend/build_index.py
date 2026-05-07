@@ -8,6 +8,7 @@ Combina:
 """
 import os, glob, json, re, argparse, base64
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from pypdf import PdfReader
 from PIL import Image
@@ -15,10 +16,14 @@ import fitz  # PyMuPDF per estrazione immagini
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import faiss
-from config import (MODEL_PROMPT, MODEL_IMAGE_ANALYSE, CHUNK_SIZE, CHUNK_OVERLAP, 
+from config import (MODEL_PROMPT, MODEL_IMAGE_ANALYSE, CHUNK_SIZE, CHUNK_OVERLAP,
                     BATCH_SIZE, MIN_IMAGE_SIZE, USE_LAYOUT_DETECTION, EMBEDDING_MODEL,
                     get_index_path, get_metadata_path, get_chunks_path, get_images_folder,
                     ensure_output_dir)
+try:
+    from config import LLM_CONCURRENCY
+except ImportError:
+    LLM_CONCURRENCY = 4
 from llm_client import call_llm_text, call_llm_with_image
 from rag_logger import get_logger
 
@@ -304,10 +309,11 @@ def chunk_text(text, chunk_size=800, overlap=200):
 
 # ===== CONTEXTUAL RETRIEVAL =====
 
-def contextualize_text_chunks_batch(doc_text, chunks, doc_name, batch_size=10, domain_prompt=None):
+def contextualize_text_chunks_batch(doc_text, chunks, doc_name, batch_size=10, domain_prompt=None, concurrency=None):
     """
     Contextual Retrieval per chunk di TESTO.
     Genera contesto LLM per ogni chunk testuale usando il modello configurato in MODEL_IMAGE_ANALYSE.
+    Supporta parallelismo tramite ThreadPoolExecutor per ridurre i tempi con grandi volumi di chunk.
     """
     if domain_prompt is None:
         domain_prompt = """You are an expert technical document analyst.
@@ -318,18 +324,19 @@ For each text chunk, provide a succinct context (1-2 sentences) that:
 
 Focus on technical accuracy and searchability."""
 
-    contextualized = []
+    if concurrency is None:
+        concurrency = LLM_CONCURRENCY
 
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i:i+batch_size]
+    doc_text_truncated = doc_text[:15000]
 
+    def process_batch(batch_start):
+        batch = chunks[batch_start:batch_start + batch_size]
         chunks_xml = ""
         for idx, chunk in enumerate(batch):
-            chunk_id = i + idx
-            chunks_xml += f'<chunk id="{chunk_id}">\n{chunk}\n</chunk>\n\n'
+            chunks_xml += f'<chunk id="{idx}">\n{chunk}\n</chunk>\n\n'
 
         user_prompt = f"""<document name="{doc_name}">
-{doc_text[:15000]}
+{doc_text_truncated}
 </document>
 
 {domain_prompt}
@@ -352,25 +359,33 @@ Return ONLY valid JSON with format:
                 user_prompt=user_prompt,
             )
             content = response_text.strip()
-
             if content.startswith('```'):
                 content = re.sub(r'^```(?:json)?\n', '', content)
                 content = re.sub(r'\n```$', '', content)
-
             contexts = json.loads(content)
-
+            result = []
             for idx, chunk in enumerate(batch):
-                chunk_id = str(i + idx)
-                context = contexts.get(chunk_id, contexts.get(str(idx), ""))
+                context = contexts.get(str(idx), "")
                 contextualized_chunk = f"CONTEXT: {context}\n\nCONTENT: {chunk}" if context else f"CONTENT: {chunk}"
-                contextualized.append(contextualized_chunk)
-
-            print(f"  ✓ Contextualised text chunks {i}-{i+len(batch)}")
-
+                result.append(contextualized_chunk)
+            print(f"  ✓ Contextualised text chunks {batch_start}-{batch_start + len(batch) - 1}")
+            return batch_start, result
         except Exception as e:
-            print(f"  [WARN] Errore contestualizzazione batch {i}: {e}")
-            for chunk in batch:
-                contextualized.append(f"CONTENT: {chunk}")
+            print(f"  [WARN] Errore contestualizzazione batch {batch_start}: {e}")
+            return batch_start, [f"CONTENT: {chunk}" for chunk in batch]
+
+    batch_starts = list(range(0, len(chunks), batch_size))
+    results_map = {}
+
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = {executor.submit(process_batch, start): start for start in batch_starts}
+        for future in as_completed(futures):
+            batch_start, batch_result = future.result()
+            results_map[batch_start] = batch_result
+
+    contextualized = []
+    for start in batch_starts:
+        contextualized.extend(results_map[start])
 
     return contextualized
 
