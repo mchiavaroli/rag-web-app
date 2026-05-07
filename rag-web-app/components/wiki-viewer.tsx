@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import useSWR, { mutate } from 'swr'
 import {
   BookOpen, FileText, Upload, Search, AlertTriangle,
-  RefreshCw, Trash2, ChevronRight, Layers, Wrench, Box, BookMarked, ImageIcon, ZoomIn, GraduationCap, Link2, Share2
+  RefreshCw, Trash2, ChevronRight, Layers, Wrench, Box, BookMarked, ImageIcon, ZoomIn, GraduationCap, Link2, Share2, Wand2
 } from 'lucide-react'
 import WikiGraph from '@/components/wiki-graph'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,8 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
   const [isIngesting, setIsIngesting] = useState(false)
   const [isLinting, setIsLinting] = useState(false)
   const [lintResult, setLintResult] = useState<any>(null)
+  const [isFixing, setIsFixing] = useState(false)
+  const [fixResult, setFixResult] = useState<any>(null)
   const [ingestResult, setIngestResult] = useState<any>(null)
   const [showLearnPanel, setShowLearnPanel] = useState(false)
   const [learnText, setLearnText] = useState('')
@@ -102,6 +104,7 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
   const handleLint = async () => {
     setIsLinting(true)
     setLintResult(null)
+    setFixResult(null)
     setIngestResult(null)
     setSelectedPage(null)
     try {
@@ -112,6 +115,32 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
       setLintResult({ success: false, error: 'Errore di rete' })
     } finally {
       setIsLinting(false)
+    }
+  }
+
+  const handleFix = async () => {
+    if (!lintResult) return
+    if (!confirm('Vuoi che l\'LLM applichi automaticamente le correzioni suggerite dall\'audit?')) return
+    setIsFixing(true)
+    setFixResult(null)
+    try {
+      const res = await fetch('/api/wiki/fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          issues: lintResult.issues || [],
+          suggestions: lintResult.suggestions || [],
+        }),
+      })
+      const data = await res.json()
+      setFixResult(data)
+      if (data.success) {
+        mutate('/api/wiki')
+      }
+    } catch {
+      setFixResult({ success: false, error: 'Errore di rete' })
+    } finally {
+      setIsFixing(false)
     }
   }
 
@@ -323,7 +352,7 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
               variant="default"
               className="flex-1 text-xs h-7"
               onClick={handleIngest}
-              disabled={isIngesting || isLinting}
+              disabled={isIngesting || isLinting || isFixing}
             >
               {isIngesting ? (
                 <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
@@ -337,7 +366,7 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
               variant={showLearnPanel ? 'secondary' : 'outline'}
               className="text-xs h-7"
               onClick={() => { setShowLearnPanel(v => !v); setLearnResult(null) }}
-              disabled={isIngesting || isLinting || isLearning}
+              disabled={isIngesting || isLinting || isLearning || isFixing}
               title="Insegna un nuovo concetto alla wiki"
             >
               <GraduationCap className="h-3 w-3 mr-1" />
@@ -348,7 +377,7 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
               variant="outline"
               className="text-xs h-7"
               onClick={handleLint}
-              disabled={isIngesting || isLinting || totalPages === 0}
+              disabled={isIngesting || isLinting || isFixing || totalPages === 0}
             >
               {isLinting ? (
                 <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
@@ -362,7 +391,7 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
               variant="ghost"
               className="text-xs h-7 text-muted-foreground hover:text-destructive"
               onClick={handleReset}
-              disabled={isIngesting || isLinting || totalPages === 0}
+              disabled={isIngesting || isLinting || isFixing || totalPages === 0}
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -561,6 +590,43 @@ export default function WikiViewer({ openPagePath, onPageOpened }: {
                 {lintResult.suggestions.map((s: string, i: number) => (
                   <p key={i} className="text-xs text-muted-foreground">• {s}</p>
                 ))}
+              </div>
+            )}
+            {(lintResult.issues?.length > 0 || lintResult.suggestions?.length > 0) && !fixResult && (
+              <div className="mt-3 pt-3 border-t">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="text-xs h-7"
+                  onClick={handleFix}
+                  disabled={isFixing}
+                >
+                  {isFixing ? (
+                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3 w-3 mr-1" />
+                  )}
+                  {isFixing ? 'Applicazione correzioni...' : 'Applica Fix con LLM'}
+                </Button>
+              </div>
+            )}
+            {fixResult && (
+              <div className={`mt-3 pt-3 border-t text-xs rounded-md px-2 py-2 ${fixResult.success ? 'bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'}`}>
+                {fixResult.success ? (
+                  <>
+                    <p className="font-semibold mb-1">✅ {fixResult.log_entry}</p>
+                    <p className="opacity-80">{fixResult.pages_created} create, {fixResult.pages_updated} aggiornate, {fixResult.fixes_applied} correzioni applicate</p>
+                    {fixResult.fixes_detail?.length > 0 && (
+                      <ul className="mt-1 space-y-0.5 opacity-70">
+                        {fixResult.fixes_detail.map((f: string, i: number) => (
+                          <li key={i}>• {f}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                ) : (
+                  <p>❌ {fixResult.error}</p>
+                )}
               </div>
             )}
           </div>

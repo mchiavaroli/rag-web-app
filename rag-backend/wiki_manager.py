@@ -18,7 +18,7 @@ import hashlib
 import mimetypes
 from config import (
     get_wiki_dir, get_wiki_schema_path, get_wiki_index_path, get_wiki_log_path,
-    WIKI_MAX_CONTEXT_PAGES, WIKI_INGEST_MAX_TOKENS,
+    WIKI_MAX_CONTEXT_PAGES, WIKI_INGEST_MAX_TOKENS, WIKI_INGEST_MAX_BATCHES,
     MODEL_PROMPT, get_model_provider, DEFAULT_MODEL_NAME,
 )
 from llm_client import call_llm_text, call_llm_with_image
@@ -288,6 +288,9 @@ def ingest_document(doc_text: str, doc_name: str, images_info: list = None,
     Ingerisce un documento nella wiki: il LLM legge il contenuto e genera/aggiorna
     le pagine wiki appropriate.
 
+    Per documenti grandi il testo viene suddiviso in chunk e ogni chunk viene
+    processato in una chiamata LLM separata, accumulando le pagine prodotte.
+
     Args:
         doc_text: testo estratto dal documento (via Document Intelligence)
         doc_name: nome del file sorgente (es. "manual_v2.pdf")
@@ -298,7 +301,6 @@ def ingest_document(doc_text: str, doc_name: str, images_info: list = None,
         dict con info sull'operazione {pages_created, pages_updated, log_entry}
     """
     _ensure_wiki_dirs()
-    # Usa il config fornito, ma aumenta max_tokens per ingest (le risposte JSON sono lunghe)
     base_config = model_config or MODEL_PROMPT
     config = dict(base_config)
     # Forza almeno 8192 token di output per evitare troncamenti del JSON
@@ -307,11 +309,41 @@ def ingest_document(doc_text: str, doc_name: str, images_info: list = None,
     else:
         config['max_tokens'] = max(config.get('max_tokens', 0), 8192)
 
-    # Carica stato attuale della wiki
-    existing_wiki = _load_all_wiki_content()
     schema = _read_file(get_wiki_schema_path())
+    wiki_dir = get_wiki_dir()
 
-    # Prepara info immagini
+    # ── Split del testo in chunk per documenti grandi ──────────────────────
+    CHUNK_CHARS = WIKI_INGEST_MAX_TOKENS * 4   # ~32 768 caratteri ≈ 8 k token
+    OVERLAP_CHARS = 500                         # sovrapposizione tra chunk adiacenti
+
+    if len(doc_text) <= CHUNK_CHARS:
+        text_chunks = [doc_text]
+    else:
+        text_chunks = []
+        start = 0
+        while start < len(doc_text):
+            text_chunks.append(doc_text[start:start + CHUNK_CHARS])
+            if start + CHUNK_CHARS >= len(doc_text):
+                break
+            start += CHUNK_CHARS - OVERLAP_CHARS
+
+    raw_chunks = len(text_chunks)
+
+    # ── Cap: se i batch superano il limite, campiona per copertura uniforme ──
+    if len(text_chunks) > WIKI_INGEST_MAX_BATCHES:
+        step = (len(text_chunks) - 1) / (WIKI_INGEST_MAX_BATCHES - 1)
+        text_chunks = [text_chunks[round(i * step)] for i in range(WIKI_INGEST_MAX_BATCHES)]
+        print(
+            f"📚 [wiki_ingest] '{doc_name}' — documento molto grande: "
+            f"{raw_chunks} segmenti → campionati {WIKI_INGEST_MAX_BATCHES} "
+            f"(copertura uniforme, {len(doc_text):,} caratteri totali)."
+        )
+    else:
+        print(f"📚 [wiki_ingest] '{doc_name}' → {len(text_chunks)} chunk(s) da processare.")
+
+    n_chunks = len(text_chunks)
+
+    # ── Sezione immagini (inclusa solo nel primo chunk) ────────────────────
     images_section = ""
     if images_info:
         img_lines = []
@@ -327,7 +359,6 @@ def ingest_document(doc_text: str, doc_name: str, images_info: list = None,
               "`images/<nomefile>` (es: `images/figura1.png`) — verranno mostrate come fonti cliccabili."
         )
 
-    # Prompt di ingest
     system_prompt = f"""Sei un wiki maintainer esperto. Segui rigorosamente queste regole:
 
 {schema}
@@ -338,20 +369,47 @@ IMPORTANTE:
 - Non ripetere informazioni già presenti in altre pagine, usa [[link]] invece.
 - Il campo "index_update" deve contenere solo l'indice aggiornato, non copiare l'intero contenuto delle pagine."""
 
-    user_prompt = f"""## Operazione: INGEST
+    pages_created = 0
+    pages_updated = 0
+    total_llm_time = 0.0
+    total_usage: dict = {}
+    last_log_entry = f"Ingerito: {doc_name}"
+    last_index_update = None
+
+    # ── Loop sui chunk ─────────────────────────────────────────────────────
+    for chunk_idx, chunk_text in enumerate(text_chunks):
+        is_first = chunk_idx == 0
+        is_last = chunk_idx == n_chunks - 1
+
+        # Ricarica la wiki ad ogni iterazione: il chunk successivo vede le pagine già scritte
+        existing_wiki = _load_all_wiki_content()
+
+        chunk_note = ""
+        if n_chunks > 1:
+            chunk_note = (
+                f"\n\n**NOTA — Segmento {chunk_idx + 1}/{n_chunks}:** "
+                + ("Crea la pagina sommario in `sources/` solo in questo primo segmento. " if is_first
+                   else "NON ricreare la pagina sommario (già esistente). ")
+                + ("Aggiorna `index_update` con tutti i link (incluse pagine già nella wiki)." if is_last
+                   else "Per `index_update` usa **null**: l'indice verrà aggiornato solo nell'ultimo segmento.")
+            )
+
+        user_prompt = f"""## Operazione: INGEST{f' — segmento {chunk_idx + 1}/{n_chunks}' if n_chunks > 1 else ''}
 
 ### Documento da ingerire
 **Nome file:** {doc_name}
 
 **Contenuto estratto:**
-{doc_text[:WIKI_INGEST_MAX_TOKENS * 4]}
-{images_section}
+{chunk_text}
+{images_section if is_first else ''}
+{chunk_note}
 
 ### Wiki esistente
 {existing_wiki}
 
 ### Istruzioni
-Analizza il documento e genera le pagine wiki necessarie. Rispondi con un JSON con questa struttura esatta:
+Analizza il testo e genera pagine wiki per i concetti/procedure/componenti presenti IN QUESTO SEGMENTO.
+Rispondi con un JSON con questa struttura esatta:
 
 ```json
 {{
@@ -363,57 +421,64 @@ Analizza il documento e genera le pagine wiki necessarie. Rispondi con un JSON c
       "content": "# Titolo\\n\\n> Una riga di descrizione.\\n\\n## Dettagli\\nContenuto conciso (max 150 parole)...\\n\\n## Fonti\\n- Documento: {doc_name}"
     }}
   ],
-  "index_update": "# Wiki Index\\n\\n## Fonti\\n- [[nome-pagina]]\\n\\n## Concetti\\n- [[altro]]",
+  "index_update": {"null" if not is_last else '"# Wiki Index\\n\\n## Fonti\\n- [[nome-pagina]]\\n\\n## Concetti\\n- [[altro]]"'},
   "log_entry": "Breve descrizione dell'operazione"
 }}
 ```
 
-REGOLE CRITICHE per non superare i token:
+REGOLE CRITICHE:
 - Ogni "content" MAX 150 parole. Usa elenchi puntati, non prosa.
 - Crea pagine SEPARATE per ogni concetto/procedura/componente (non accumularli in una sola).
 - Usa `[[link]]` per collegare invece di ripetere info.
-- "index_update" deve essere solo l'indice con link, NON copiare contenuti.
+- {"index_update: aggiorna l'indice con TUTTI i link (incluse pagine già presenti nella wiki)." if is_last else "index_update: deve essere null."}
 
-Genera:
-1. Una pagina sommario in `sources/` per questo documento
-2. Pagine per ogni concetto tecnico in `concepts/` (una per concetto)
-3. Pagine per procedure operative in `procedures/` (una per procedura)
-4. Pagine per componenti/Part Numbers in `components/` (una per componente)
-5. Aggiorna `index.md` con i nuovi link"""
+Genera{":" if not is_first else " (solo per questo primo segmento):"}
+{("1. Una pagina sommario in `sources/` per questo documento" + chr(10)) if is_first else ""}{"2" if is_first else "1"}. Pagine per ogni concetto tecnico in `concepts/` (una per concetto)
+{"3" if is_first else "2"}. Pagine per procedure operative in `procedures/` (una per procedura)
+{"4" if is_first else "3"}. Pagine per componenti/Part Numbers in `components/` (una per componente)
+{("5. Aggiorna `index.md` con i nuovi link") if is_last else ""}"""
 
-    t0 = time.time()
-    response_text, usage = call_llm_text(config, system_prompt, user_prompt)
-    llm_time_ms = (time.time() - t0) * 1000
+        t0 = time.time()
+        response_text, usage = call_llm_text(config, system_prompt, user_prompt)
+        chunk_llm_time = (time.time() - t0) * 1000
+        total_llm_time += chunk_llm_time
 
-    # Parse risposta JSON
-    result = _parse_ingest_response(response_text, doc_name)
+        # Accumula usage tokens
+        for k, v in (usage or {}).items():
+            if isinstance(v, (int, float)):
+                total_usage[k] = total_usage.get(k, 0) + v
 
-    # Scrivi le pagine su disco
-    wiki_dir = get_wiki_dir()
-    pages_created = 0
-    pages_updated = 0
+        result = _parse_ingest_response(response_text, doc_name)
 
-    for page in result.get("pages", []):
-        cat = page.get("category", "concepts")
-        fname = page.get("filename", "untitled.md")
-        if not fname.endswith(".md"):
-            fname += ".md"
+        # Scrivi le pagine immediatamente (il prossimo chunk le vedrà in existing_wiki)
+        for page in result.get("pages", []):
+            cat = page.get("category", "concepts")
+            fname = page.get("filename", "untitled.md")
+            if not fname.endswith(".md"):
+                fname += ".md"
 
-        filepath = os.path.join(wiki_dir, cat, fname)
-        existed = os.path.exists(filepath)
-        _write_file(filepath, page.get("content", ""))
+            filepath = os.path.join(wiki_dir, cat, fname)
+            existed = os.path.exists(filepath)
+            _write_file(filepath, page.get("content", ""))
 
-        if existed:
-            pages_updated += 1
-        else:
-            pages_created += 1
+            if existed:
+                pages_updated += 1
+            else:
+                pages_created += 1
 
-    # Aggiorna index.md
-    if result.get("index_update"):
-        _write_file(get_wiki_index_path(), result["index_update"])
+        if result.get("index_update"):
+            last_index_update = result["index_update"]
+        if result.get("log_entry"):
+            last_log_entry = result["log_entry"]
+
+        print(f"  chunk {chunk_idx + 1}/{n_chunks}: {len(result.get('pages', []))} pagine — {chunk_llm_time:.0f}ms")
+
+    # Aggiorna index.md con l'ultimo index_update valido
+    if last_index_update:
+        _write_file(get_wiki_index_path(), last_index_update)
 
     # Aggiorna log.md
-    log_entry = result.get("log_entry", f"Ingerito: {doc_name}")
+    log_entry = last_log_entry
     _append_log(f"**INGEST** — {log_entry}")
 
     # --- Analisi vision delle immagini (se presenti) ---
@@ -438,8 +503,9 @@ Genera:
         "images_pages_created": images_result['pages_created'],
         "images_skipped": images_result['skipped'],
         "log_entry": log_entry,
-        "llm_time_ms": round(llm_time_ms, 2),
-        "usage": usage,
+        "chunks_processed": n_chunks,
+        "llm_time_ms": round(total_llm_time, 2),
+        "usage": total_usage,
     }
 
 
@@ -930,6 +996,150 @@ def _parse_json_response(text: str) -> dict:
             except json.JSONDecodeError:
                 pass
     return {"issues": [], "suggestions": ["Errore nel parsing della risposta LLM."], "health_score": 0}
+
+
+# ============================================================
+# FIX — Applica le correzioni suggerite dal Lint
+# ============================================================
+
+def fix_wiki(issues: list, suggestions: list, model_config: dict = None) -> dict:
+    """
+    Applica automaticamente le correzioni suggerite dall'audit Lint.
+
+    Prende issues e suggestions dal risultato di lint_wiki() e usa l'LLM per:
+    - Correggere link rotti
+    - Completare pagine incomplete
+    - Risolvere contraddizioni
+    - Creare pagine mancanti segnalate
+    - Applicare i suggerimenti generali
+
+    Returns:
+        dict con {success, pages_created, pages_updated, fixes_applied, log_entry}
+    """
+    if not issues and not suggestions:
+        return {
+            "success": True,
+            "pages_created": 0,
+            "pages_updated": 0,
+            "fixes_applied": 0,
+            "log_entry": "Nessun problema da correggere.",
+        }
+
+    config = model_config or MODEL_PROMPT
+    # Aumenta token per risposta più lunga
+    config = dict(config)
+    if config.get("provider") == "openai":
+        config["max_completion_tokens"] = max(config.get("max_completion_tokens", 0), 8192)
+    else:
+        config["max_tokens"] = max(config.get("max_tokens", 0), 8192)
+
+    _ensure_wiki_dirs()
+
+    existing_wiki = _load_all_wiki_content()
+    schema = _read_file(get_wiki_schema_path())
+
+    # Formatta issues e suggestions per il prompt
+    issues_text = "\n".join(
+        f"- [{i.get('severity','?').upper()}] [{i.get('type','?')}] {i.get('page','?')}: {i.get('description','')}"
+        for i in issues
+    ) or "Nessun issue specifico."
+
+    suggestions_text = "\n".join(f"- {s}" for s in suggestions) or "Nessun suggerimento specifico."
+
+    system_prompt = f"""Sei un wiki maintainer esperto. Il tuo compito è correggere i problemi
+trovati durante un audit della wiki e applicare i suggerimenti di miglioramento.
+
+{schema}
+
+IMPORTANTE:
+- Rispondi SOLO con un JSON valido. Nessun testo prima o dopo.
+- Aggiorna SOLO le pagine che richiedono correzioni, non riscrivere l'intera wiki.
+- Per i link rotti: correggi il [[link]] o rimuovilo se la pagina non esiste.
+- Per le pagine incomplete: aggiungi contenuto rilevante basandoti sul contesto della wiki.
+- Per le contraddizioni: scegli la versione più accurata e aggiorna entrambe le pagine.
+- Per le pagine mancanti: creale con contenuto appropriato basandoti su quanto menzione la wiki.
+- Il contenuto deve essere CONCISO (max 200 parole per pagina nuova)."""
+
+    user_prompt = f"""## Operazione: FIX (Manutenzione Wiki)
+
+### Problemi trovati dall'audit
+{issues_text}
+
+### Suggerimenti di miglioramento
+{suggestions_text}
+
+### Wiki attuale (completa)
+{existing_wiki}
+
+### Istruzioni
+Correggi TUTTI i problemi elencati e applica i suggerimenti. Rispondi con questo JSON:
+
+```json
+{{
+  "pages": [
+    {{
+      "action": "create" | "update",
+      "category": "concepts" | "procedures" | "components" | "sources" | "images",
+      "filename": "nome-file.md",
+      "content": "# Titolo\\n\\nContenuto corretto/aggiornato..."
+    }}
+  ],
+  "fixes_applied": [
+    "Breve descrizione di ogni correzione applicata"
+  ],
+  "log_entry": "Riepilogo delle correzioni effettuate"
+}}
+```
+
+Correggi ogni issue in modo mirato. Non modificare pagine che non hanno problemi."""
+
+    t0 = time.time()
+    response_text, usage = call_llm_text(config, system_prompt, user_prompt)
+    llm_time_ms = (time.time() - t0) * 1000
+
+    result = _parse_json_response(response_text)
+
+    wiki_dir = get_wiki_dir()
+    pages_created = 0
+    pages_updated = 0
+
+    for page in result.get("pages", []):
+        cat = page.get("category", "concepts")
+        if cat not in WIKI_CATEGORIES:
+            cat = "concepts"
+        fname = page.get("filename", "untitled.md")
+        if not fname.endswith(".md"):
+            fname += ".md"
+        # Sanitize per sicurezza
+        fname = os.path.basename(fname)
+
+        filepath = os.path.join(wiki_dir, cat, fname)
+        existed = os.path.exists(filepath)
+        _write_file(filepath, page.get("content", ""))
+
+        if existed:
+            pages_updated += 1
+        else:
+            pages_created += 1
+
+    fixes_applied = result.get("fixes_applied", [])
+    log_entry = result.get("log_entry", f"Fix: {pages_created} create, {pages_updated} aggiornate")
+
+    _append_log(
+        f"**FIX** — {log_entry} "
+        f"({pages_created} create, {pages_updated} aggiornate, {len(fixes_applied)} correzioni)"
+    )
+
+    return {
+        "success": True,
+        "pages_created": pages_created,
+        "pages_updated": pages_updated,
+        "fixes_applied": len(fixes_applied),
+        "fixes_detail": fixes_applied,
+        "log_entry": log_entry,
+        "llm_time_ms": round(llm_time_ms, 2),
+        "usage": usage,
+    }
 
 
 # ============================================================

@@ -1,17 +1,17 @@
-"""
-Configurazione centralizzata per il progetto RAG Multimodale + LLM Wiki.
+ï»¿"""
+Configurazione centralizzata per il progetto LLM Wiki.
 
 ISTRUZIONI:
-  1. Copia questo file come config.py:  cp "config _example.py" config.py
-  2. Compila tutti i valori vuoti '' con le tue credenziali Azure.
-  3. Non committare mai config.py (aggiungilo a .gitignore).
+  1. Copia questo file come config.py
+  2. Compila tutti i valori vuoti '' con le tue credenziali Azure
+  3. Non committare mai config.py (aggiungilo a .gitignore)
 """
 
 # ============================================================================
 # CONFIGURAZIONE OUTPUT
 # ============================================================================
 
-OUTPUT_DIR = "output"           # Cartella per FAISS index, metadata, chunk, immagini
+OUTPUT_DIR = "output"
 
 # ============================================================================
 # PARAMETRI DI PROCESSING
@@ -27,46 +27,22 @@ LLM_CONCURRENCY = 4       # Chiamate LLM in parallelo per la contestualizzazione
 
 # Estrazione immagini
 MIN_IMAGE_SIZE = 100      # Dimensione minima immagini da estrarre (pixel)
-USE_LAYOUT_DETECTION = True  # Se True, usa OpenCV per detectare figure vettoriali
-
-# Retrieval
-TOP_K_TEXT = 10           # Chunk testuali da recuperare per query
-TOP_K_IMAGES = 3          # Immagini massime per query
-MIN_K_IMAGES = 0          # Immagini minime (0 = rispetta solo i filtri)
-SEARCH_MULTIPLIER = 5     # Moltiplicatore per la ricerca iniziale
-
-# Soglia per selezione fonti testuali
-TEXT_SOURCE_SCORE_THRESHOLD = 0.50
-
-# Soglie per selezione immagini
-IMAGE_HIGH_SCORE_THRESHOLD = 0.65      # Score sopra cui l'immagine è sempre inclusa
-IMAGE_SCORE_THRESHOLD = 0.60           # Score minimo base per includere un'immagine
-IMAGE_KEYWORD_OVERLAP_MIN = 0.20       # Overlap keyword minimo abbinato a IMAGE_SCORE_THRESHOLD
-IMAGE_SCORE_MIN_WITH_KEYWORD = 0.60    # Score minimo se c'è overlap keyword sufficiente
-IMAGE_KEYWORD_OVERLAP_MAX = 0.30       # Overlap keyword per case con score basso
-IMAGE_KEYWORD_BOOST_THRESHOLD = 0.75   # Overlap keyword sopra cui applicare boost
-
-# Embedding model (Sentence Transformers)
-EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
 
 # Nomi file di output (relativi a OUTPUT_DIR)
-INDEX_FILENAME = 'docs_index_multimodal_contextual.faiss'
-METADATA_FILENAME = 'metadata_multimodal_contextual.json'
 CHUNKS_FILENAME = 'chunks_multimodal_contextual.jsonl'
 EXTRACTED_IMAGES_FOLDER = 'extracted_images'
 
 # ============================================================================
 # CONFIGURAZIONE MODELLI LLM (Azure AI Foundry)
 # ============================================================================
-# Aggiungi o rimuovi modelli in base a quelli disponibili nella tua risorsa Azure.
-# Ogni entry deve avere:
+# Ogni entry richiede:
 #   provider:          'openai' | 'anthropic' | 'mistral' | 'mistral-ocr'
 #   deployment_name:   nome del deployment in Azure AI Foundry
 #   endpoint:          URL endpoint della risorsa Azure
 #   api_key:           chiave API
 #   max_tokens:        per Anthropic e Mistral
 #   max_completion_tokens: per OpenAI (al posto di max_tokens)
-#   temperature:       0 = deterministico, 1 = creativo
+#   temperature:       0 = deterministico
 #   api_version:       solo per provider 'openai'
 #   name:              nome visualizzato nella UI
 
@@ -138,43 +114,19 @@ DOCUMENT_INTELLIGENCE = {
     'endpoint': '',
     'api_key': '',
     'api_version': '2024-02-29-preview',
-    'model_id': 'prebuilt-layout'
-}
-
-# ============================================================================
-# CONFIGURAZIONE AZURE AI SEARCH (Vector Store cloud — opzionale)
-# ============================================================================
-
-AZURE_SEARCH = {
-    'endpoint': '',     # es. https://my-search.search.windows.net
-    'api_key': '',
-    'index_name': 'rag-multimodal-index',
-    'embedding_dimensions': 384,   # all-MiniLM-L6-v2 ? 384 dim
-}
-
-# ============================================================================
-# CONFIGURAZIONE AZURE AI VISION (analisi immagini alternativa — opzionale)
-# ============================================================================
-
-AZURE_VISION = {
-    'endpoint': '',
-    'api_key': '',
-    'api_version': '2024-02-01',
-    'features': ['caption', 'denseCaptions', 'tags', 'read'],
-    'language': 'it',
-    'gender_neutral_caption': True
+    'model_id': 'prebuilt-layout',
 }
 
 # ============================================================================
 # CONFIGURAZIONE WIKI (LLM Wiki layer)
 # ============================================================================
 
-WIKI_DIR = "wiki"                      # Directory radice della wiki
-WIKI_SCHEMA_FILE = "schema.md"         # File schema (regole per il LLM)
-WIKI_INDEX_FILE = "index.md"           # Indice principale
-WIKI_LOG_FILE = "log.md"               # Log operazioni
-WIKI_MAX_CONTEXT_PAGES = 15            # Max pagine wiki da includere nel contesto LLM
-WIKI_INGEST_MAX_TOKENS = 8192          # Max caratteri del documento inviati in ingest (x4 ˜ token)
+WIKI_DIR = "wiki"
+WIKI_SCHEMA_FILE = "schema.md"
+WIKI_INDEX_FILE = "index.md"
+WIKI_LOG_FILE = "log.md"
+WIKI_MAX_CONTEXT_PAGES = 15    # Max pagine wiki nel contesto LLM per query
+WIKI_INGEST_MAX_TOKENS = 8192  # Max caratteri del documento inviati in ingest
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -183,14 +135,7 @@ WIKI_INGEST_MAX_TOKENS = 8192          # Max caratteri del documento inviati in 
 import os
 
 def get_output_path(filename):
-    """Restituisce il path completo per un file nella cartella output."""
     return os.path.join(OUTPUT_DIR, filename)
-
-def get_index_path():
-    return get_output_path(INDEX_FILENAME)
-
-def get_metadata_path():
-    return get_output_path(METADATA_FILENAME)
 
 def get_chunks_path():
     return get_output_path(CHUNKS_FILENAME)

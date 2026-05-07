@@ -20,9 +20,9 @@ from pydantic import BaseModel
 import uvicorn
 
 from config import (
-    get_index_path, get_chunks_path, get_images_folder, get_metadata_path,
-    OUTPUT_DIR, EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE,
-    MIN_IMAGE_SIZE, ensure_output_dir
+    get_chunks_path, get_images_folder,
+    OUTPUT_DIR, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE,
+    MIN_IMAGE_SIZE, ensure_output_dir, MODEL_PROMPT,
 )
 
 # ============================================================
@@ -76,10 +76,8 @@ app.mount("/docs", StaticFiles(directory=DOCS_DIR), name="docs")
 # ============================================================
 
 def _run_indexing() -> None:
-    """Esegue la build dell'indice in un thread separato."""
+    """Estrae testo e immagini dai documenti e salva i chunk in JSONL per la wiki."""
     global indexing_state
-    from rag_logger import RAGLogger
-    logger = RAGLogger(log_dir=os.path.join(_BASE_DIR, "output", "logs"))
 
     try:
         indexing_state["status"] = "building"
@@ -97,13 +95,8 @@ def _run_indexing() -> None:
             indexing_state["message"] = "Nessun documento da indicizzare"
             return
 
-        log_context = logger.log_indexing_start(docs)
-
         build_index_with_document_intelligence(
             docs,
-            embed_model_name=EMBEDDING_MODEL,
-            index_path=get_index_path(),
-            meta_path=get_metadata_path(),
             chunk_size=CHUNK_SIZE,
             overlap=CHUNK_OVERLAP,
             analyze_images=True,
@@ -113,11 +106,10 @@ def _run_indexing() -> None:
             use_document_intelligence=True,
         )
 
-        # Leggi le statistiche dall'indice appena creato
+        # Aggiorna contatori dallo JSONL appena creato
         chunks_path = get_chunks_path()
-        all_chunks: dict = {}
-        images_info = []
         if os.path.exists(chunks_path):
+            all_chunks: dict = {}
             with open(chunks_path, "r", encoding="utf-8") as f:
                 for line in f:
                     obj = json.loads(line)
@@ -125,51 +117,10 @@ def _run_indexing() -> None:
             indexing_state["total_chunks"] = len(all_chunks)
             indexing_state["text_chunks"] = sum(1 for c in all_chunks.values() if c["type"] == "text")
             indexing_state["image_chunks"] = sum(1 for c in all_chunks.values() if c["type"] == "image")
-            images_info = [
-                {"path": c["image_path"], "page": c.get("page"), "size": [], "type": "image"}
-                for c in all_chunks.values()
-                if c["type"] == "image" and c.get("image_path")
-            ]
-
-        # Calcola numero totale pagine
-        total_pages = sum(
-            len(doc.get("di_result", {}).get("pages", [])) if doc.get("di_result") else 0
-            for doc in docs
-        )
-
-        # Recupera model info dalla config
-        try:
-            from config import MODEL_IMAGE_ANALYSE
-            model_name = MODEL_IMAGE_ANALYSE.get("deployment_name", str(MODEL_IMAGE_ANALYSE)) if isinstance(MODEL_IMAGE_ANALYSE, dict) else str(MODEL_IMAGE_ANALYSE)
-        except Exception:
-            model_name = "unknown"
-
-        logger.log_indexing_complete(
-            context=log_context,
-            document_info={
-                "filename": docs[0]["path"] if len(docs) == 1 else f"{len(docs)} documenti",
-                "pages": total_pages,
-                "file_type": "multi" if len(docs) > 1 else os.path.splitext(docs[0]["path"])[1],
-            },
-            chunks_info={
-                "total": len(all_chunks),
-                "text": indexing_state.get("text_chunks", 0),
-                "images": indexing_state.get("image_chunks", 0),
-            },
-            images_info=images_info,
-            llm_calls_info={
-                "contextualization": indexing_state.get("text_chunks", 0),
-                "image_analysis": indexing_state.get("image_chunks", 0),
-                "total_calls": len(all_chunks),
-            },
-            index_path=get_index_path(),
-            model_info={"text_model": model_name, "image_model": model_name},
-        )
-        print("📝 Log indicizzazione salvato in: output/logs/indexing_logs.jsonl")
 
         indexing_state["status"] = "ready"
         indexing_state["completed_at"] = datetime.now().isoformat()
-        indexing_state["message"] = "Indice pronto"
+        indexing_state["message"] = "Indicizzazione completata"
         print("✅ Indicizzazione completata.")
 
     except Exception as exc:
@@ -209,12 +160,11 @@ def _list_docs() -> List[dict]:
 
 @app.on_event("startup")
 async def startup() -> None:
-    """Controlla lo stato iniziale dell'indice all'avvio del server."""
-    index_path = get_index_path()
+    """Controlla lo stato iniziale all'avvio del server."""
     chunks_path = get_chunks_path()
     docs_count = len(glob.glob(os.path.join(DOCS_DIR, "*.pdf")))
-    
-    if os.path.exists(index_path) and os.path.exists(chunks_path):
+
+    if os.path.exists(chunks_path):
         try:
             all_chunks: dict = {}
             indexed_docs: set = set()
@@ -223,21 +173,20 @@ async def startup() -> None:
                     obj = json.loads(line)
                     all_chunks[obj["chunk_id"]] = obj
                     indexed_docs.add(obj.get("source", ""))
-            
-            # Verifica: il numero di doc nell'indice corrisponde ai PDF fisici?
+
             if len(indexed_docs) < docs_count:
                 print(f"⚠️  Documenti mismatch: {len(indexed_docs)} indicizzati, {docs_count} fisici.")
                 print("📦 Avvio re-indicizzazione...")
                 _start_indexing()
             else:
                 indexing_state["status"] = "ready"
-                indexing_state["message"] = "Indice pronto"
+                indexing_state["message"] = "Indicizzazione pronta"
                 indexing_state["total_chunks"] = len(all_chunks)
                 indexing_state["text_chunks"] = sum(1 for c in all_chunks.values() if c["type"] == "text")
                 indexing_state["image_chunks"] = sum(1 for c in all_chunks.values() if c["type"] == "image")
-                print(f"✅ Indice trovato: {len(all_chunks)} chunk ({len(indexed_docs)} doc)")
+                print(f"✅ Chunks trovati: {len(all_chunks)} ({len(indexed_docs)} doc)")
         except Exception as exc:
-            print(f"[WARN] Impossibile leggere lo stato dell'indice: {exc}")
+            print(f"[WARN] Impossibile leggere i chunks: {exc}")
             if docs_count > 0:
                 _start_indexing()
     else:
@@ -519,16 +468,6 @@ async def wiki_query_endpoint(request: WikiQueryRequest) -> dict:
     model_name = request.model or DEFAULT_MODEL_NAME
     model_config = get_model_provider(model_name) or MODEL_PROMPT
 
-    # Recupera session history per contesto conversazionale
-    session_history = []
-    if request.session_id:
-        try:
-            from rag_logger import get_logger
-            logger = get_logger()
-            session_history = logger.get_session_history(request.session_id) or []
-        except Exception:
-            pass
-
     answer, pages_used, usage, wiki_context = wq(
         query=request.query,
         session_history=session_history,
@@ -569,6 +508,15 @@ async def wiki_lint() -> dict:
     """Esegue un audit/lint della wiki."""
     from wiki_manager import lint_wiki
     return lint_wiki()
+
+
+@app.post("/api/wiki/fix")
+async def wiki_fix(body: dict) -> dict:
+    """Applica le correzioni suggerite dall'audit Lint."""
+    from wiki_manager import fix_wiki
+    issues = body.get("issues", [])
+    suggestions = body.get("suggestions", [])
+    return fix_wiki(issues=issues, suggestions=suggestions)
 
 
 @app.get("/api/wiki/log")

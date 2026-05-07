@@ -8,7 +8,7 @@ L'LLM Wiki non è un semplice indice vettoriale: è una raccolta di pagine Markd
 
 ---
 
-## Funzionalitè
+## Funzionalità
 
 ### Pipeline RAG (indicizzazione)
 
@@ -85,21 +85,16 @@ Contenuto conciso (max 150-200 parole, elenchi puntati preferiti).
 
 ```
 PDF / DOCX / TXT
-       è
        ?
 Azure Document Intelligence  --------------------------+
-(estrazione testo + tabelle)                           è
-       è                                               è
-       ?                                               ?
+(estrazione testo + tabelle)                           
+       ?                                               
 Chunking (800 char, overlap 200)         Estrazione immagini
-       è                                  (bitmap + vettoriali)
-       ?                                               è
-Contextual Retrieval                                   ?
+       ?                                               
+Contextual Retrieval                                   
 (LLM genera contesto per chunk)         Analisi vision LLM
-       è                                  (descrizione tecnica)
-       ?                                               è
+       ?                                               
 Sentence Transformers embedding  ?---------------------+
-       è
        ?
 FAISS index  +  metadata.json  +  chunks.jsonl
 ```
@@ -108,21 +103,16 @@ FAISS index  +  metadata.json  +  chunks.jsonl
 
 ```
 Documento indicizzato
-       è
        ?
 wiki_manager.ingest_document()
-       è
        +- Carica wiki esistente come contesto
        +- Invia documento + wiki al LLM
        +- LLM risponde con JSON: {pages, index_update, log_entry}
-       è
        +- Scrive pagine in wiki/sources/, concepts/, procedures/, components/
        +- Aggiorna wiki/index.md
        +- Appende a wiki/log.md
-       è
        ? (se ci sono immagini)
 wiki_manager.ingest_images_to_wiki()
-       è
        +- Per ogni immagine: call_llm_with_image() ? descrizione tecnica
        +- Scrive pagina in wiki/images/{filename}.md
 ```
@@ -131,16 +121,12 @@ wiki_manager.ingest_images_to_wiki()
 
 ```
 Domanda utente
-       è
        ?
 _find_relevant_pages(query)    ? keyword scoring su tutte le pagine wiki
-       è
        ?
 Top-K pagine wiki  +  FAISS retrieval (chunk testuali + immagini)
-       è
        ?
 LLM genera risposta
-       è
        ?
 Risposta  +  fonti PDF  +  immagini correlate
 ```
@@ -229,9 +215,12 @@ AZURE_VISION = {
 
 ```python
 WIKI_DIR = "wiki"
-WIKI_MAX_CONTEXT_PAGES = 15    # Max pagine wiki nel contesto LLM per query
-WIKI_INGEST_MAX_TOKENS = 8192  # Max caratteri del documento inviati in ingest (x4 per token)
+WIKI_MAX_CONTEXT_PAGES = 15     # Max pagine wiki nel contesto LLM per query
+WIKI_INGEST_MAX_TOKENS = 8192   # Dimensione di ogni segmento di testo inviato al LLM durante l'ingest (in token ×4 = caratteri)
+WIKI_INGEST_MAX_BATCHES = 12    # Max chiamate LLM per documento; per documenti molto grandi i segmenti vengono campionati uniformemente fino a questo limite
 ```
+
+`WIKI_INGEST_MAX_BATCHES` evita run indefiniti su documenti enormi: se il testo suddiviso genera più segmenti del limite, vengono selezionati `WIKI_INGEST_MAX_BATCHES` segmenti posizionati a distanza uniforme lungo tutto il documento (dal primo all'ultimo), garantendo copertura dell'intero contenuto.
 
 ---
 
