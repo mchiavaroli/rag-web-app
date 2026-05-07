@@ -343,20 +343,34 @@ def ingest_document(doc_text: str, doc_name: str, images_info: list = None,
 
     n_chunks = len(text_chunks)
 
-    # ── Sezione immagini (inclusa solo nel primo chunk) ────────────────────
-    images_section = ""
+    # ── Mappa pagina → slug immagini (calcolata deterministicamente) ────────
+    # Usa la stessa logica di ingest_images_to_wiki per generare i slug,
+    # così il LLM può inserire [[wikilink]] corretti anche prima che le pagine esistano.
+    page_image_map: dict = {}  # {page_num_str: [(slug, img_fname), ...]}
     if images_info:
-        img_lines = []
         for img in images_info:
-            img_fname = os.path.basename(img.get('path', 'N/A'))
-            img_lines.append(
-                f"- `images/{img_fname}` (pag. {img.get('page', '?')}): {img.get('description', '')[:120]}"
-            )
-        images_section = (
-            "\n\n## Immagini/Disegni Tecnici nel documento\n"
-            + "\n".join(img_lines)
-            + "\n\nNOTA: Nelle pagine wiki fai riferimento alle immagini usando il path esatto "
-              "`images/<nomefile>` (es: `images/figura1.png`) — verranno mostrate come fonti cliccabili."
+            img_fname = os.path.basename(img.get('path', ''))
+            if not img_fname:
+                continue
+            slug = _sanitize_filename(os.path.splitext(img_fname)[0])
+            page_key = str(img.get('page', '?'))
+            page_image_map.setdefault(page_key, []).append((slug, img_fname))
+
+    # Sezione immagini compatta con slug navigabili — inclusa in TUTTI i chunk
+    images_map_section = ""
+    if page_image_map:
+        map_lines = []
+        for page_key in sorted(page_image_map.keys(), key=lambda x: int(x) if x.isdigit() else 0):
+            slugs_info = page_image_map[page_key]
+            links = ", ".join(f"[[{s}]]" for s, _ in slugs_info)
+            map_lines.append(f"- Pagina {page_key}: {links}")
+        images_map_section = (
+            "\n\n## Mappa Immagini del Documento (usa questi [[link]] in 'Riferimenti Visivi')\n"
+            + "\n".join(map_lines)
+            + "\n\nREGOLA: Ogni pagina di componente/concetto/procedura che fa riferimento a figure "
+              "deve includere una sezione '## Riferimenti Visivi' con i [[wikilink]] "
+              "corrispondenti alla pagina del documento. Es: se un componente è descritto a pag. 103, "
+              "aggiungi `## Riferimenti Visivi\n- [[t-roc-2024-...p103-img1]]`"
         )
 
     system_prompt = f"""Sei un wiki maintainer esperto. Segui rigorosamente queste regole:
@@ -375,6 +389,23 @@ IMPORTANTE:
     total_usage: dict = {}
     last_log_entry = f"Ingerito: {doc_name}"
     last_index_update = None
+
+    # ── Analisi vision immagini PRIMA del loop testuale ────────────────────
+    # Così le pagine wiki/images/ esistono già quando il LLM scrive i componenti
+    # e le trova nella existing_wiki → può aggiungere [[link]] corretti.
+    images_result = {"pages_created": 0, "pages_updated": 0, "skipped": 0}
+    if images_info:
+        from config import get_images_folder
+        print(f"🖼️  [wiki_ingest] Analisi vision di {len(images_info)} immagini prima dell'ingest testuale...")
+        images_result = ingest_images_to_wiki(
+            images_info=images_info,
+            doc_name=doc_name,
+            images_base_dir=get_images_folder(),
+            model_config=model_config,
+        )
+        pages_created += images_result['pages_created']
+        pages_updated += images_result['pages_updated']
+        print(f"  → {images_result['pages_created']} pagine immagine create, {images_result['skipped']} skip")
 
     # ── Loop sui chunk ─────────────────────────────────────────────────────
     for chunk_idx, chunk_text in enumerate(text_chunks):
@@ -401,7 +432,7 @@ IMPORTANTE:
 
 **Contenuto estratto:**
 {chunk_text}
-{images_section if is_first else ''}
+{images_map_section}
 {chunk_note}
 
 ### Wiki esistente
@@ -418,7 +449,7 @@ Rispondi con un JSON con questa struttura esatta:
       "action": "create" | "update",
       "category": "sources" | "concepts" | "procedures" | "components",
       "filename": "nome-file.md",
-      "content": "# Titolo\\n\\n> Una riga di descrizione.\\n\\n## Dettagli\\nContenuto conciso (max 150 parole)...\\n\\n## Fonti\\n- Documento: {doc_name}"
+      "content": "# Titolo\\n\\n> Una riga di descrizione.\\n\\n## Dettagli\\nContenuto conciso (max 150 parole)...\\n\\n## Riferimenti Visivi\\n- [[slug-immagine-pagina]]\\n\\n## Fonti\\n- Documento: {doc_name}"
     }}
   ],
   "index_update": {"null" if not is_last else '"# Wiki Index\\n\\n## Fonti\\n- [[nome-pagina]]\\n\\n## Concetti\\n- [[altro]]"'},
@@ -430,6 +461,7 @@ REGOLE CRITICHE:
 - Ogni "content" MAX 150 parole. Usa elenchi puntati, non prosa.
 - Crea pagine SEPARATE per ogni concetto/procedura/componente (non accumularli in una sola).
 - Usa `[[link]]` per collegare invece di ripetere info.
+- **IMMAGINI**: Ogni pagina che descrive qualcosa illustrato nel documento DEVE includere `## Riferimenti Visivi` con i [[wikilink]] corretti dalla "Mappa Immagini" sopra, basandoti sul numero di pagina dove appare il concetto.
 - {"index_update: aggiorna l'indice con TUTTI i link (incluse pagine già presenti nella wiki)." if is_last else "index_update: deve essere null."}
 
 Genera{":" if not is_first else " (solo per questo primo segmento):"}
@@ -480,19 +512,6 @@ Genera{":" if not is_first else " (solo per questo primo segmento):"}
     # Aggiorna log.md
     log_entry = last_log_entry
     _append_log(f"**INGEST** — {log_entry}")
-
-    # --- Analisi vision delle immagini (se presenti) ---
-    images_result = {"pages_created": 0, "pages_updated": 0, "skipped": 0}
-    if images_info:
-        from config import get_images_folder
-        images_result = ingest_images_to_wiki(
-            images_info=images_info,
-            doc_name=doc_name,
-            images_base_dir=get_images_folder(),
-            model_config=model_config,
-        )
-        pages_created += images_result['pages_created']
-        pages_updated += images_result['pages_updated']
 
     return {
         "success": True,
